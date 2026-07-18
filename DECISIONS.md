@@ -57,3 +57,32 @@ different direction in a future conversation.
 The formatted Windows environment had conflicts in the default `uv` cache path and access issues
 in the default managed Python path. Phase 0 uses project-local `.uv-cache` and `.uv-python`
 directories so setup and verification can proceed without changing broader user-profile state.
+
+## ADR-0008: Use Foundry Local SDK WinML On Windows
+
+- Status: Accepted
+- Date: 2026-07-18
+
+GroundNote uses `foundry-local-sdk-winml` on Windows and `foundry-local-sdk` only on macOS through
+mutually exclusive environment markers. The installed Windows SDK version is `1.2.3`. The SDK is
+isolated behind provider interfaces so preview API changes remain contained.
+
+## ADR-0009: Use SDK-Selected CPU Variants For Initial Benchmarks
+
+- Status: Accepted
+- Date: 2026-07-18
+
+The CLI catalog lists GPU as the default hardware target for the Phase 1 aliases, but the
+project-local SDK benchmark resolved and ran CPU variants for `phi-3.5-mini`, `qwen2.5-0.5b`, and
+`qwen3-embedding-0.6b`. This is conservative and reliable on the development machine. GPU
+availability was detected, but no GPU-specific alias or variant was forced in Phase 1.
+
+## ADR-0010: Keep Initial Model Defaults
+
+- Status: Accepted
+- Date: 2026-07-18
+
+Benchmarks showed both chat candidates can answer a trivial prompt, and the embedding candidate
+returns finite 1024-dimensional float32 vectors. GroundNote keeps `phi-3.5-mini` as the default
+chat model, `qwen2.5-0.5b` as the low-resource fallback, and `qwen3-embedding-0.6b` for
+embeddings.
