@@ -1,4 +1,4 @@
-# Codex State
+# Project State
 
 ## Current Phase
 
