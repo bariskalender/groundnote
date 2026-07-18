@@ -28,6 +28,8 @@ RAG workflow is not complete yet.
 - Local chat model provider.
 - Local embedding provider.
 - Model benchmark scripts.
+- Typed settings and explicit application bootstrap.
+- SQLite schema migrations and repository foundation.
 - Unit tests.
 - Ruff and mypy checks.
 
@@ -89,9 +91,9 @@ uv run pytest -m "not foundry"
 
 - Phase 0 completed.
 - Phase 1 completed.
-- Phase 2 not started.
+- Phase 2 completed.
 - Document ingestion is not implemented yet.
-- SQLite storage is not implemented yet.
+- SQLite storage foundation is implemented, but no documents are ingested yet.
 - Retrieval and RAG pipeline are not implemented yet.
 
 ## Privacy

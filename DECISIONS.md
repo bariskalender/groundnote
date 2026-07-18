@@ -86,3 +86,29 @@ Benchmarks showed both chat candidates can answer a trivial prompt, and the embe
 returns finite 1024-dimensional float32 vectors. GroundNote keeps `phi-3.5-mini` as the default
 chat model, `qwen2.5-0.5b` as the low-resource fallback, and `qwen3-embedding-0.6b` for
 embeddings.
+
+## ADR-0011: Use Pydantic Settings With Explicit Bootstrap
+
+- Status: Accepted
+- Date: 2026-07-18
+
+GroundNote uses `pydantic-settings` for typed configuration and `platformdirs` for default local
+data paths. Importing settings does not create directories; directory and database initialization
+run only through explicit bootstrap.
+
+## ADR-0012: Use Lightweight SQLite Migrations And Unit Of Work
+
+- Status: Accepted
+- Date: 2026-07-18
+
+GroundNote uses a small versioned SQL migration runner instead of Alembic. SQLite repositories do
+not commit on every method; transaction boundaries are controlled by `SQLiteUnitOfWork` so future
+document replacement and re-indexing workflows can be atomic.
+
+## ADR-0013: Store Embeddings As float32 BLOB Values
+
+- Status: Accepted
+- Date: 2026-07-18
+
+GroundNote serializes one-dimensional finite NumPy embeddings as contiguous `float32` bytes with
+dimension and dtype metadata. Pickle and JSON embedding storage are intentionally avoided.

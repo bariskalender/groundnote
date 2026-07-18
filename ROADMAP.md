@@ -4,8 +4,8 @@
 | --- | --- | --- |
 | 0 | Repository foundation and application shell | Complete |
 | 1 | Environment verification and Foundry Local discovery | Complete |
-| 2 | Configuration, logging, and application settings | Not started |
-| 3 | SQLite schema and storage layer | Not started |
+| 2 | Configuration, Domain Models, and SQLite Storage | Complete |
+| 3 | Secure document validation and parsing | Not started |
 | 4 | Document ingestion for PDF, DOCX, TXT, and Markdown | Not started |
 | 5 | Chunking pipeline and metadata handling | Not started |
 | 6 | Embedding provider interface and local embedding persistence | Not started |
@@ -29,3 +29,14 @@
 - Fake providers support normal unit tests without model downloads.
 - Lightweight chat and embedding candidates were benchmarked sequentially.
 - No document ingestion, SQLite storage, retrieval, or Streamlit chat was implemented.
+
+## Phase 2 Acceptance Notes
+
+- Typed settings load from defaults, `.env`, and `GROUNDNOTE_` environment variables.
+- Structured logging is configured explicitly and redacts sensitive fields.
+- Domain models exist for documents, chunks, retrieval results, and answers.
+- SQLite migrations create `documents`, `document_chunks`, and `application_metadata`.
+- Embeddings serialize as finite one-dimensional float32 BLOB values.
+- Document and vector repositories work through a transaction-aware Unit of Work.
+- Bootstrap initializes settings, logging, directories, and database schema.
+- No parsing, ingestion, retrieval, RAG generation, or Streamlit chat was implemented.

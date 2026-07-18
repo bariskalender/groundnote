@@ -5,6 +5,7 @@ env/
 .uv-cache/
 .uv-python/
 .foundry-local/
+.local-data/
 __pycache__/
 *.py[cod]
 *.pyc

@@ -61,7 +61,7 @@ fall back to Azure OpenAI, OpenAI APIs, or another cloud provider.
 
 - `config`: Settings and environment loading.
 - `domain`: Core project entities and value objects.
-- `storage`: SQLite persistence.
+- `storage`: SQLite connection management, migrations, repositories, and transaction handling.
 - `documents`: File ingestion and text extraction.
 - `chunking`: Document chunking.
 - `embeddings`: Embedding provider interfaces and local model integration.
@@ -78,6 +78,14 @@ Foundry Local-specific code must live behind provider interfaces so SDK changes 
 - Local chunking, embedding, storage, retrieval, and answer generation.
 - Simple Streamlit interface for upload, indexing status, chat, and citations.
 - Clear setup and troubleshooting documentation.
+
+Implemented foundation so far:
+
+- Typed settings and explicit application bootstrap.
+- Privacy-aware structured logging helpers.
+- Domain models for documents, chunks, retrieval results, and answers.
+- SQLite schema migrations and repository foundation.
+- Float32 BLOB embedding serialization.
 
 ## Non-MVP Features
 
