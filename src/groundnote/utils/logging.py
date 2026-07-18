@@ -11,6 +11,8 @@ import structlog
 
 SENSITIVE_FIELD_NAMES = {
     "answer",
+    "api_key",
+    "authorization",
     "content",
     "document_text",
     "embedding",
@@ -70,7 +72,7 @@ def sanitize_log_fields(fields: dict[str, Any]) -> dict[str, Any]:
         elif isinstance(value, Path):
             sanitized[key] = safe_filename(value)
         else:
-            sanitized[key] = value
+            sanitized[key] = _sanitize_value(value)
     return sanitized
 
 
@@ -80,3 +82,15 @@ def _sanitize_event(
     event_dict: structlog.typing.EventDict,
 ) -> structlog.typing.EventDict:
     return sanitize_log_fields(dict(event_dict))
+
+
+def _sanitize_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return sanitize_log_fields(value)
+    if isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_sanitize_value(item) for item in value)
+    if isinstance(value, Path):
+        return safe_filename(value)
+    return value
