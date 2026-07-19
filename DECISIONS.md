@@ -112,3 +112,21 @@ document replacement and re-indexing workflows can be atomic.
 
 GroundNote serializes one-dimensional finite NumPy embeddings as contiguous `float32` bytes with
 dimension and dtype metadata. Pickle and JSON embedding storage are intentionally avoided.
+
+## ADR-0014: Use Focused Local Parsers For Phase 3
+
+- Status: Accepted
+- Date: 2026-07-19
+
+GroundNote uses `pypdf` for PDF text extraction and `python-docx` for DOCX text extraction. TXT
+and Markdown are handled with the Python standard library. OCR and heavyweight document
+frameworks are intentionally avoided for the MVP.
+
+## ADR-0015: Keep Parsing Separate From Ingestion And Indexing
+
+- Status: Accepted
+- Date: 2026-07-19
+
+Phase 3 validates, hashes, checks exact duplicates, and parses documents, but it does not create
+chunks, generate embeddings, index documents, retrieve context, or call Foundry Local models. This
+keeps parser safety and privacy concerns isolated before the ingestion pipeline is added.

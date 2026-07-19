@@ -86,6 +86,8 @@ Implemented foundation so far:
 - Domain models for documents, chunks, retrieval results, and answers.
 - SQLite schema migrations and repository foundation.
 - Float32 BLOB embedding serialization.
+- Secure validation, hashing, duplicate pre-checking, and text extraction for PDF, DOCX, TXT, and
+  Markdown.
 
 ## Non-MVP Features
 

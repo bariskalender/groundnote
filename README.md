@@ -30,6 +30,7 @@ RAG workflow is not complete yet.
 - Model benchmark scripts.
 - Typed settings and explicit application bootstrap.
 - SQLite schema migrations and repository foundation.
+- Secure document validation and text extraction for PDF, DOCX, TXT, and Markdown.
 - Unit tests.
 - Ruff and mypy checks.
 
@@ -55,7 +56,7 @@ hardware.
 ## Planned Features
 
 - Drag-and-drop document upload.
-- PDF, DOCX, TXT, and Markdown support.
+- Persistent document ingestion workflow.
 - Local SQLite knowledge base.
 - Hybrid recursive chunking.
 - Semantic search using embeddings and cosine similarity.
@@ -92,9 +93,14 @@ uv run pytest -m "not foundry"
 - Phase 0 completed.
 - Phase 1 completed.
 - Phase 2 completed.
-- Document ingestion is not implemented yet.
-- SQLite storage foundation is implemented, but no documents are ingested yet.
+- Phase 3 completed.
+- Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
+- Persistent document ingestion is not implemented yet.
+- SQLite storage foundation is implemented, but parsed documents are not ingested yet.
 - Retrieval and RAG pipeline are not implemented yet.
+
+See `docs/supported-documents.md` and `docs/document-processing.md` for the current document
+processing behavior and limitations.
 
 ## Privacy
 

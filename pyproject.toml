@@ -15,6 +15,8 @@ dependencies = [
   "numpy",
   "structlog",
   "platformdirs",
+  "pypdf",
+  "python-docx",
   "python-dotenv",
   "foundry-local-sdk-winml; sys_platform == 'win32'",
   "foundry-local-sdk; sys_platform == 'darwin'",

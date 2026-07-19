@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 2: Configuration, Domain Models, and SQLite Storage.
+Phase 3: Secure Document Validation and Parsing.
 
 ## Completed Tasks
 
@@ -37,6 +37,23 @@ Phase 2: Configuration, Domain Models, and SQLite Storage.
 - Updated the minimal Streamlit shell to run safe bootstrap and show initialization status.
 - Added configuration and database schema documentation.
 
+### Phase 3
+
+- Added secure validation for PDF, DOCX, TXT, and Markdown files.
+- Added safe display filename normalization and UUID-prefixed stored filename generation.
+- Added streaming SHA-256 hashing for original file bytes.
+- Added exact duplicate pre-checking through the existing document repository contract.
+- Added parser-neutral `ParsedDocument`, `ParsedSection`, `ValidationResult`, and
+  `DuplicateCheckResult` models.
+- Added PDF parsing with page-by-page extraction, 1-based page numbers, blank-page warnings,
+  encrypted PDF rejection, corrupted PDF rejection, and scanned/image-only limitations.
+- Added DOCX parsing for headings, paragraphs, list text, and simple table text.
+- Added TXT parsing for UTF-8 and UTF-8 with BOM with binary-looking file rejection.
+- Added Markdown parsing with heading sections, lists, code blocks, Unicode, and inert HTML text.
+- Added a parser registry and document processing service.
+- Added safe uploaded-byte writing helper for future UI integration.
+- Added supported-document and document-processing documentation.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -48,16 +65,29 @@ Phase 2: Configuration, Domain Models, and SQLite Storage.
 - `uv run pytest --cov=groundnote --cov-report=term-missing`
 - `uv run streamlit run src/groundnote/app.py`
 
+## Commands Run In Phase 3
+
+- `uv sync`
+- `uv run pytest tests/unit/documents tests/integration/documents`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest -m "not foundry"`
+- `uv run pytest --cov=groundnote --cov-report=term-missing`
+- `uv run python scripts/check_foundry.py`
+- `uv run streamlit run src/groundnote/app.py`
+
 ## Test Status
 
 - `uv sync`: Passed.
 - `uv run ruff check .`: Passed.
 - `uv run ruff format --check .`: Passed.
 - `uv run mypy src`: Passed.
-- `uv run pytest -m "not foundry"`: Passed, 46 tests passed.
-- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 46 tests passed, 72%
+- `uv run pytest -m "not foundry"`: Passed, 74 tests passed.
+- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 74 tests passed, 80%
   total coverage.
 - Streamlit startup smoke test: Passed.
+- Phase 3 targeted parser and document service tests: Passed, 28 tests passed.
 
 ## Model Benchmark Status
 
@@ -77,6 +107,9 @@ Phase 2: Configuration, Domain Models, and SQLite Storage.
   Windows workspace.
 - Foundry Local CLI `0.10.2` uses `foundry server status`; `foundry service status` is not
   recognized in this installed preview version.
+- During the Phase 3 regression check, the Foundry CLI and SDK were detectable, but the local
+  Foundry service reported `Not running`. This did not affect Phase 3 because parsing does not
+  initialize or call Foundry models.
 
 ## Environment Facts
 
@@ -88,4 +121,4 @@ Phase 2: Configuration, Domain Models, and SQLite Storage.
 
 ## Next Phase
 
-Phase 3: Secure Document Validation and Parsing.
+Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
