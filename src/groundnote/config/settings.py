@@ -48,9 +48,20 @@ class Settings(BaseSettings):
         ),
     )
     embedding_model: str = "qwen3-embedding-0.6b"
+    embedding_dimension: int = 1024
+    embedding_batch_size: int = 16
+    embedding_dtype: str = "float32"
+    embedding_version: str = "foundry-qwen3-embedding-v1"
 
-    top_k: int = 4
-    similarity_threshold: float = 0.35
+    top_k: int = Field(default=5, validation_alias=AliasChoices("GROUNDNOTE_TOP_K"))
+    similarity_threshold: float = Field(
+        default=0.20,
+        validation_alias=AliasChoices(
+            "GROUNDNOTE_RETRIEVAL_MINIMUM_SCORE",
+            "GROUNDNOTE_SIMILARITY_THRESHOLD",
+        ),
+    )
+    retrieval_candidate_limit: int = 50
     maximum_upload_size_mb: int = Field(
         default=50,
         validation_alias=AliasChoices(
@@ -120,8 +131,8 @@ class Settings(BaseSettings):
     @field_validator("top_k")
     @classmethod
     def top_k_must_be_small(cls, value: int) -> int:
-        if not 1 <= value <= 10:
-            raise ValueError("top_k must be between 1 and 10.")
+        if not 1 <= value <= 20:
+            raise ValueError("top_k must be between 1 and 20.")
         return value
 
     @field_validator("similarity_threshold")
@@ -129,6 +140,34 @@ class Settings(BaseSettings):
     def similarity_threshold_must_be_cosine_range(cls, value: float) -> float:
         if not -1.0 <= value <= 1.0:
             raise ValueError("similarity_threshold must be between -1.0 and 1.0.")
+        return value
+
+    @field_validator("embedding_dimension", "embedding_batch_size")
+    @classmethod
+    def embedding_positive_values(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("embedding numeric settings must be positive.")
+        return value
+
+    @field_validator("retrieval_candidate_limit")
+    @classmethod
+    def candidate_limit_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 500:
+            raise ValueError("retrieval_candidate_limit must be between 1 and 500.")
+        return value
+
+    @field_validator("embedding_dtype")
+    @classmethod
+    def embedding_dtype_must_be_supported(cls, value: str) -> str:
+        if value != "float32":
+            raise ValueError("Only float32 embeddings are supported.")
+        return value
+
+    @field_validator("embedding_model", "embedding_version")
+    @classmethod
+    def embedding_text_settings_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("embedding settings must not be empty.")
         return value
 
     @field_validator("maximum_upload_size_mb")
@@ -178,6 +217,8 @@ class Settings(BaseSettings):
             raise ValueError("chunk_overlap_characters must be smaller than target.")
         if self.chunk_minimum_characters > self.chunk_target_characters:
             raise ValueError("chunk_minimum_characters must be less than or equal to target.")
+        if self.retrieval_candidate_limit < self.top_k:
+            raise ValueError("retrieval_candidate_limit must be greater than or equal to top_k.")
         if self.database_path is None:
             raise ValueError("database_path could not be resolved.")
         if self.database_path.suffix.lower() not in SUPPORTED_SQLITE_SUFFIXES:

@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
+Phase 5: Embedding, Indexing, and Semantic Retrieval.
 
 ## Completed Tasks
 
@@ -70,6 +70,22 @@ Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
 - Added a SQLite migration for chunk source metadata.
 - Added chunking and pre-embedding ingestion documentation.
 
+### Phase 5
+
+- Added embedding configuration for model, dimension, dtype, batch size, version, top-k, candidate
+  limit, and minimum score.
+- Added normalized float32 embedding validation and embedding service wrappers.
+- Added SQLite embedding metadata migration for document and chunk rows.
+- Extended vector repository behavior for saving, clearing, loading, filtering, and counting
+  indexed embeddings.
+- Added transaction-safe document indexing and force re-index foundations.
+- Added NumPy cosine-similarity semantic retrieval with deterministic ranking.
+- Added document ID, file type, page number, score threshold, top-k, and candidate limit filters.
+- Added retrieval results with filename, file type, page, section, source order, score, and safe
+  metadata.
+- Fixed Foundry Local manager reuse for the installed preview SDK singleton behavior.
+- Added embedding/indexing and semantic retrieval documentation.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -107,17 +123,37 @@ Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
 - Targeted chunking and pre-embedding ingestion smoke test.
 - Headless Streamlit startup smoke test.
 
+## Commands Run In Phase 5
+
+- `foundry server status`
+- `foundry status`
+- `foundry model download qwen3-embedding-0.6b`
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest tests/unit/embeddings tests/unit/retrieval tests/integration/indexing -q --basetemp .local-data/pytest-phase5-target`
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase5-full`
+- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase5-cov`
+- `uv run python scripts/check_foundry.py`
+- Real Foundry embedding smoke test with `qwen3-embedding-0.6b`.
+- Real end-to-end ingestion, indexing, and retrieval smoke test.
+- Headless Streamlit startup smoke test.
+
 ## Test Status
 
 - `uv sync`: Passed.
 - `uv run ruff check .`: Passed.
 - `uv run ruff format --check .`: Passed.
 - `uv run mypy src`: Passed.
-- `uv run pytest -m "not foundry"`: Passed, 90 tests passed.
-- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 90 tests passed, 83%
+- `uv run pytest -m "not foundry"`: Passed, 103 tests passed.
+- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 103 tests passed, 83%
   total coverage.
 - Streamlit startup smoke test: Passed.
 - Phase 4 targeted chunking and ingestion tests: Passed, 16 tests passed.
+- Phase 5 targeted embedding, indexing, and retrieval tests: Passed, 13 tests passed.
+- Real Foundry embedding smoke test: Passed, 3 vectors, 1024 dimensions, finite float32 values.
+- Real end-to-end indexing and retrieval smoke test: Passed.
 
 ## Model Benchmark Status
 
@@ -139,6 +175,10 @@ Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
   recognized in this installed preview version.
 - Phase 4 did not initialize or call Foundry Local models. The final Phase 4 regression check
   reported Foundry service `Ready` with `0` loaded models.
+- Phase 5 needed a one-time `qwen3-embedding-0.6b` download because Foundry status reported `0`
+  cached models and initial load failed with a missing model path.
+- After Phase 5 smoke tests, Foundry status reported service `Ready`, local service `Reachable`,
+  `1` cached model, and `0` loaded models.
 
 ## Environment Facts
 
@@ -150,4 +190,4 @@ Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
 
 ## Next Phase
 
-Phase 5: Embedding, Indexing, and Semantic Retrieval.
+Phase 6: RAG Generation, Prompt Safety, Citations, and Language Handling.

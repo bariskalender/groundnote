@@ -72,6 +72,9 @@ class FoundryManager:
                 model_cache_dir=self._path_to_str(self.model_cache_dir),
                 logs_dir=self._path_to_str(self.logs_dir),
             )
+            existing = getattr(FoundryLocalManager, "instance", None)
+            if existing is not None:
+                return existing
             FoundryLocalManager.initialize(config)
             return FoundryLocalManager.instance
         except Exception as exc:  # pragma: no cover - SDK-specific behavior

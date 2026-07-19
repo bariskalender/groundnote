@@ -32,6 +32,7 @@ RAG workflow is not complete yet.
 - SQLite schema migrations and repository foundation.
 - Secure document validation and text extraction for PDF, DOCX, TXT, and Markdown.
 - Deterministic hybrid recursive chunking and pre-embedding ingestion.
+- Local embedding indexing and semantic retrieval.
 - Unit tests.
 - Ruff and mypy checks.
 
@@ -59,7 +60,7 @@ hardware.
 - Drag-and-drop document upload.
 - Persistent pre-embedding document ingestion workflow.
 - Local SQLite knowledge base.
-- Semantic search using embeddings and cosine similarity.
+- RAG answer generation using retrieved context.
 - Source filename and page number display.
 - Document deletion and re-indexing.
 - English interface.
@@ -95,13 +96,16 @@ uv run pytest -m "not foundry"
 - Phase 2 completed.
 - Phase 3 completed.
 - Phase 4 completed.
+- Phase 5 completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
-- Embeddings are not generated yet.
-- Retrieval and RAG pipeline are not implemented yet.
+- Local embeddings are generated and persisted for indexed documents.
+- Semantic retrieval returns ranked chunks with citation metadata.
+- RAG answer generation is not implemented yet.
 
 See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
-and `docs/pre-embedding-ingestion.md` for the current behavior and limitations.
+`docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
+`docs/semantic-retrieval.md` for the current behavior and limitations.
 
 ## Privacy
 

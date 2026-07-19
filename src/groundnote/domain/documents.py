@@ -56,6 +56,7 @@ class Document(BaseModel):
     error_message: str | None = None
     embedding_model: str | None = None
     embedding_dimension: int | None = Field(default=None, gt=0)
+    embedding_version: str | None = None
     chunking_version: str | None = None
 
     @field_validator("sha256")

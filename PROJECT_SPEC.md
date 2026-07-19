@@ -89,6 +89,8 @@ Implemented foundation so far:
 - Secure validation, hashing, duplicate pre-checking, and text extraction for PDF, DOCX, TXT, and
   Markdown.
 - Deterministic hybrid recursive chunking and transaction-safe pre-embedding ingestion.
+- Local Foundry embedding generation, normalized SQLite vector persistence, and NumPy semantic
+  retrieval.
 
 ## Non-MVP Features
 

@@ -12,6 +12,7 @@ from groundnote.storage.exceptions import (
 from groundnote.storage.migrations import MigrationRunner
 from groundnote.storage.repositories import (
     DocumentRepository,
+    SearchableChunkEmbedding,
     SerializedEmbedding,
     SQLiteDocumentRepository,
     SQLiteVectorRepository,
@@ -31,6 +32,7 @@ __all__ = [
     "SQLiteUnitOfWork",
     "SQLiteUnitOfWorkFactory",
     "SQLiteVectorRepository",
+    "SearchableChunkEmbedding",
     "SerializedEmbedding",
     "StorageError",
     "VectorRepository",

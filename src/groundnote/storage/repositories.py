@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol, cast
@@ -38,6 +39,16 @@ class StoredChunkEmbedding:
     embedding: npt.NDArray[np.float32] | None
 
 
+@dataclass(frozen=True)
+class SearchableChunkEmbedding:
+    """Indexed chunk vector with safe document citation metadata."""
+
+    chunk: DocumentChunk
+    embedding: npt.NDArray[np.float32]
+    original_filename: str
+    file_type: SupportedFileType
+
+
 class DocumentRepository(Protocol):
     """Document persistence contract."""
 
@@ -65,7 +76,37 @@ class VectorRepository(Protocol):
     ) -> None: ...
     def list_for_document(self, document_id: str) -> list[DocumentChunk]: ...
     def list_all_embeddings(self) -> list[StoredChunkEmbedding]: ...
+    def save_chunk_embedding(
+        self,
+        *,
+        chunk_id: str,
+        embedding: SerializedEmbedding,
+        embedding_model: str,
+        embedding_version: str,
+        embedded_at: datetime,
+    ) -> None: ...
+    def save_chunk_embeddings(
+        self,
+        embeddings: list[tuple[str, SerializedEmbedding]],
+        *,
+        embedding_model: str,
+        embedding_version: str,
+        embedded_at: datetime,
+    ) -> None: ...
+    def list_searchable_embeddings(
+        self,
+        *,
+        embedding_model: str,
+        embedding_version: str,
+        document_ids: list[str] | None = None,
+        file_types: list[SupportedFileType] | None = None,
+        page_numbers: list[int] | None = None,
+        limit: int | None = None,
+    ) -> list[SearchableChunkEmbedding]: ...
     def get_chunks_by_ids(self, chunk_ids: list[str]) -> list[DocumentChunk]: ...
+    def clear_embeddings_for_document(self, document_id: str) -> None: ...
+    def count_indexed_chunks(self) -> int: ...
+    def count_embedded_chunks_for_document(self, document_id: str) -> int: ...
     def delete_for_document(self, document_id: str) -> None: ...
     def count_chunks(self) -> int: ...
     def count_chunks_for_document(self, document_id: str) -> int: ...
@@ -85,9 +126,10 @@ class SQLiteDocumentRepository:
                 INSERT INTO documents (
                     id, original_filename, stored_filename, file_type, sha256,
                     file_size_bytes, page_count, status, created_at, updated_at, indexed_at,
-                    error_message, embedding_model, embedding_dimension, chunking_version
+                    error_message, embedding_model, embedding_dimension, embedding_version,
+                    chunking_version
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _document_values(document),
             )
@@ -129,7 +171,7 @@ class SQLiteDocumentRepository:
                 SET original_filename = ?, stored_filename = ?, file_type = ?, sha256 = ?,
                     file_size_bytes = ?, page_count = ?, status = ?, created_at = ?,
                     updated_at = ?, indexed_at = ?, error_message = ?, embedding_model = ?,
-                    embedding_dimension = ?, chunking_version = ?
+                    embedding_dimension = ?, embedding_version = ?, chunking_version = ?
                 WHERE id = ?
                 """,
                 (*_document_values(document)[1:], document.id),
@@ -182,9 +224,9 @@ class SQLiteVectorRepository:
                     id, document_id, chunk_index, content, page_number, section_title,
                     character_count, token_estimate, source_start_order, source_end_order,
                     chunking_version, metadata_json, embedding, embedding_dimension,
-                    embedding_dtype, created_at
+                    embedding_dtype, embedding_model, embedding_version, embedded_at, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [_chunk_values(chunk, embedding) for chunk, embedding in chunks],
             )
@@ -207,6 +249,114 @@ class SQLiteVectorRepository:
             """
         ).fetchall()
         return [_stored_embedding_from_row(row) for row in rows]
+
+    def save_chunk_embedding(
+        self,
+        *,
+        chunk_id: str,
+        embedding: SerializedEmbedding,
+        embedding_model: str,
+        embedding_version: str,
+        embedded_at: datetime,
+    ) -> None:
+        self.save_chunk_embeddings(
+            [(chunk_id, embedding)],
+            embedding_model=embedding_model,
+            embedding_version=embedding_version,
+            embedded_at=embedded_at,
+        )
+
+    def save_chunk_embeddings(
+        self,
+        embeddings: list[tuple[str, SerializedEmbedding]],
+        *,
+        embedding_model: str,
+        embedding_version: str,
+        embedded_at: datetime,
+    ) -> None:
+        if not embeddings:
+            return
+        try:
+            cursor = self._connection.executemany(
+                """
+                UPDATE document_chunks
+                SET embedding = ?,
+                    embedding_dimension = ?,
+                    embedding_dtype = ?,
+                    embedding_model = ?,
+                    embedding_version = ?,
+                    embedded_at = ?
+                WHERE id = ?
+                """,
+                [
+                    (
+                        embedding.data,
+                        embedding.dimension,
+                        embedding.dtype,
+                        embedding_model,
+                        embedding_version,
+                        _datetime_to_text(embedded_at),
+                        chunk_id,
+                    )
+                    for chunk_id, embedding in embeddings
+                ],
+            )
+        except sqlite3.Error as exc:
+            raise StorageError("Could not save chunk embeddings.") from exc
+        if cursor.rowcount != len(embeddings):
+            raise StorageError("Could not save every chunk embedding.")
+
+    def list_searchable_embeddings(
+        self,
+        *,
+        embedding_model: str,
+        embedding_version: str,
+        document_ids: list[str] | None = None,
+        file_types: list[SupportedFileType] | None = None,
+        page_numbers: list[int] | None = None,
+        limit: int | None = None,
+    ) -> list[SearchableChunkEmbedding]:
+        clauses = [
+            "d.status = ?",
+            "c.embedding IS NOT NULL",
+            "c.embedding_model = ?",
+            "c.embedding_version = ?",
+        ]
+        parameters: list[object] = [
+            DocumentStatus.INDEXED.value,
+            embedding_model,
+            embedding_version,
+        ]
+        if document_ids is not None:
+            if not document_ids:
+                return []
+            clauses.append(f"c.document_id IN ({_placeholders(document_ids)})")
+            parameters.extend(document_ids)
+        if file_types is not None:
+            if not file_types:
+                return []
+            clauses.append(f"d.file_type IN ({_placeholders(file_types)})")
+            parameters.extend(file_type.value for file_type in file_types)
+        if page_numbers is not None:
+            if not page_numbers:
+                return []
+            clauses.append(f"c.page_number IN ({_placeholders(page_numbers)})")
+            parameters.extend(page_numbers)
+        query = f"""
+            SELECT
+                c.*,
+                d.original_filename AS document_original_filename,
+                d.file_type AS document_file_type
+            FROM document_chunks c
+            JOIN documents d ON d.id = c.document_id
+            WHERE {" AND ".join(clauses)}
+            ORDER BY c.document_id, c.chunk_index, c.id
+        """
+        if limit is not None:
+            query += " LIMIT ?"
+            parameters.append(limit)
+        rows = self._connection.execute(query, tuple(parameters)).fetchall()
+        return [_searchable_embedding_from_row(row) for row in rows]
 
     def get_chunks_by_ids(self, chunk_ids: list[str]) -> list[DocumentChunk]:
         if not chunk_ids:
@@ -242,6 +392,40 @@ class SQLiteVectorRepository:
     def clear_all_chunks(self) -> None:
         self._connection.execute("DELETE FROM document_chunks")
 
+    def clear_embeddings_for_document(self, document_id: str) -> None:
+        self._connection.execute(
+            """
+            UPDATE document_chunks
+            SET embedding = NULL,
+                embedding_dimension = NULL,
+                embedding_dtype = NULL,
+                embedding_model = NULL,
+                embedding_version = NULL,
+                embedded_at = NULL
+            WHERE document_id = ?
+            """,
+            (document_id,),
+        )
+
+    def count_indexed_chunks(self) -> int:
+        return int(
+            self._connection.execute(
+                "SELECT COUNT(*) FROM document_chunks WHERE embedding IS NOT NULL"
+            ).fetchone()[0]
+        )
+
+    def count_embedded_chunks_for_document(self, document_id: str) -> int:
+        return int(
+            self._connection.execute(
+                """
+                SELECT COUNT(*)
+                FROM document_chunks
+                WHERE document_id = ? AND embedding IS NOT NULL
+                """,
+                (document_id,),
+            ).fetchone()[0]
+        )
+
 
 def _document_values(document: Document) -> tuple[object, ...]:
     return (
@@ -259,6 +443,7 @@ def _document_values(document: Document) -> tuple[object, ...]:
         document.error_message,
         document.embedding_model,
         document.embedding_dimension,
+        document.embedding_version,
         document.chunking_version,
     )
 
@@ -283,6 +468,9 @@ def _chunk_values(
         embedding.data if embedding is not None else None,
         embedding.dimension if embedding is not None else chunk.embedding_dimension,
         embedding.dtype if embedding is not None else None,
+        chunk.embedding_model,
+        chunk.embedding_version,
+        _optional_datetime_to_text(chunk.embedded_at),
         _datetime_to_text(chunk.created_at),
     )
 
@@ -303,6 +491,7 @@ def _document_from_row(row: sqlite3.Row) -> Document:
         error_message=_optional_str(row["error_message"]),
         embedding_model=_optional_str(row["embedding_model"]),
         embedding_dimension=_optional_int(row["embedding_dimension"]),
+        embedding_version=_optional_str(row["embedding_version"]),
         chunking_version=_optional_str(row["chunking_version"]),
     )
 
@@ -318,6 +507,10 @@ def _chunk_from_row(row: sqlite3.Row) -> DocumentChunk:
         character_count=int(row["character_count"]),
         token_estimate=_optional_int(row["token_estimate"]),
         embedding_dimension=_optional_int(row["embedding_dimension"]),
+        embedding_model=_optional_str(row["embedding_model"]),
+        embedding_version=_optional_str(row["embedding_version"]),
+        embedding_dtype=_optional_str(row["embedding_dtype"]),
+        embedded_at=_optional_datetime_from_text(row["embedded_at"]),
         source_start_order=_optional_int(row["source_start_order"]),
         source_end_order=_optional_int(row["source_end_order"]),
         chunking_version=_optional_str(row["chunking_version"]),
@@ -341,6 +534,22 @@ def _stored_embedding_from_row(row: sqlite3.Row) -> StoredChunkEmbedding:
         expected_dtype=str(dtype),
     )
     return StoredChunkEmbedding(chunk=chunk, embedding=embedding)
+
+
+def _searchable_embedding_from_row(row: sqlite3.Row) -> SearchableChunkEmbedding:
+    stored = _stored_embedding_from_row(row)
+    if stored.embedding is None:
+        raise InvalidEmbeddingError("Searchable chunk is missing an embedding.")
+    return SearchableChunkEmbedding(
+        chunk=stored.chunk,
+        embedding=stored.embedding,
+        original_filename=str(row["document_original_filename"]),
+        file_type=SupportedFileType(str(row["document_file_type"])),
+    )
+
+
+def _placeholders(values: Sequence[object]) -> str:
+    return ",".join("?" for _ in values)
 
 
 def _datetime_to_text(value: datetime) -> str:

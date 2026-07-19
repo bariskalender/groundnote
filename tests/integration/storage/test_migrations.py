@@ -26,7 +26,7 @@ def test_migrations_create_tables_and_indexes(database_path: Path) -> None:
         }
         foreign_keys = connection.execute("PRAGMA foreign_keys").fetchone()[0]
 
-    assert [migration.version for migration in applied] == [1, 2]
+    assert [migration.version for migration in applied] == [1, 2, 3]
     assert {"documents", "document_chunks", "application_metadata"} <= tables
     assert {"idx_documents_sha256", "idx_document_chunks_document_id"} <= indexes
     assert foreign_keys == 1
@@ -39,7 +39,7 @@ def test_migrations_are_idempotent(initialized_database: Path) -> None:
         count = connection.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
 
     assert applied == []
-    assert count == 2
+    assert count == 3
 
 
 def test_invalid_migration_rolls_back(tmp_path: Path) -> None:

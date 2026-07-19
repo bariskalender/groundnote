@@ -152,3 +152,33 @@ Phase 4 persists document metadata and ordered chunk rows in one SQLite Unit of 
 direction and lets Phase 5 focus on embedding generation and indexing. Parser and chunking failures
 roll back the transaction, repeated exact files do not create duplicates, and no document is marked
 `INDEXED` before embeddings exist.
+
+## ADR-0018: Store Normalized float32 Embeddings
+
+- Status: Accepted
+- Date: 2026-07-19
+
+Phase 5 validates Foundry Local embedding output, converts vectors to `float32`, rejects NaN,
+infinity, wrong dimensions, and zero vectors, then stores L2-normalized vectors as compact SQLite
+BLOBs. Because stored vectors and query vectors use the same normalization policy, semantic
+retrieval can use NumPy dot product as cosine similarity without adding FAISS or another vector
+database.
+
+## ADR-0019: Make Indexing Transactional And Retrieval INDEXED-Only
+
+- Status: Accepted
+- Date: 2026-07-19
+
+Document indexing runs inside one SQLite Unit of Work and changes status from `PENDING_EMBEDDING`
+to `INDEXING` to `INDEXED`. If embedding generation or persistence fails, the transaction rolls
+back and the document remains non-searchable. Retrieval only loads chunks from `INDEXED` documents
+whose embedding model and embedding version match the active settings.
+
+## ADR-0020: Keep Phase 5 Retrieval Answer-Free
+
+- Status: Accepted
+- Date: 2026-07-19
+
+Phase 5 returns ranked chunks, scores, and citation metadata only. It does not call a chat model,
+build prompts, or generate natural-language answers. RAG generation remains explicitly deferred to
+Phase 6.

@@ -7,7 +7,7 @@
 | 2 | Configuration, Domain Models, and SQLite Storage | Complete |
 | 3 | Secure document validation and parsing | Complete |
 | 4 | Hybrid Recursive Chunking and Pre-Embedding Ingestion | Complete |
-| 5 | Embedding, Indexing, and Semantic Retrieval | Not started |
+| 5 | Embedding, Indexing, and Semantic Retrieval | Complete |
 | 6 | Foundry Local chat provider and RAG answer generation | Not started |
 | 7 | Streamlit study workflow UI | Not started |
 | 8 | Polishing, documentation, packaging notes, and final QA | Not started |
@@ -67,3 +67,16 @@
 - Persisted document metadata and chunks with `PENDING_EMBEDDING` status and null embedding fields.
 - No embeddings, Foundry model calls, semantic retrieval, RAG generation, or final upload/chat UI
   were implemented.
+
+## Phase 5 Acceptance Notes
+
+- Added local embedding validation, normalization, and batch generation through Foundry Local.
+- Stored normalized float32 embeddings and embedding metadata in SQLite.
+- Added transaction-safe document indexing with `PENDING_EMBEDDING -> INDEXING -> INDEXED` status
+  flow.
+- Added safe force re-indexing and embedding clearing foundations.
+- Added NumPy cosine-similarity semantic retrieval with top-k, candidate limits, minimum score, and
+  document/file/page filters.
+- Returned ranked chunks with filename, file type, page, section, source order, score, and metadata.
+- No chat model calls, RAG answer generation, final upload/chat UI, external vector database, or
+  cloud API were implemented.
