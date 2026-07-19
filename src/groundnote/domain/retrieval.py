@@ -12,6 +12,6 @@ class RetrievalResult(BaseModel):
     document_id: str = Field(min_length=1)
     filename: str = Field(min_length=1)
     page_number: int | None = Field(default=None, gt=0)
-    content: str
+    content: str = Field(repr=False)
     similarity_score: float = Field(ge=-1.0, le=1.0)
     rank: int = Field(ge=1)

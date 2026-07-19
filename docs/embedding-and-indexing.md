@@ -21,6 +21,10 @@ Foundry SDK details remain inside the AI provider layer. The indexing workflow c
 through `EmbeddingService`, which validates vector count, dimension, dtype, finite values, and
 positive norm. The chat model is not loaded or called by Phase 5.
 
+If direct SDK model loading fails because of a Foundry Local preview runtime/cache mismatch, the
+embedding provider may use the OpenAI-compatible Foundry Local daemon on `127.0.0.1` for the same
+local embedding model variant. This remains local-only and does not fall back to a cloud API.
+
 ## Batching
 
 Chunks are embedded sequentially in configured batches. Input order is preserved and the final

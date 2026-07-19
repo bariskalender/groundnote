@@ -13,7 +13,7 @@ class DocumentChunk(BaseModel):
     id: str = Field(min_length=1)
     document_id: str = Field(min_length=1)
     chunk_index: int = Field(ge=0)
-    content: str
+    content: str = Field(repr=False)
     page_number: int | None = Field(default=None, gt=0)
     section_title: str | None = None
     character_count: int = Field(ge=0)

@@ -19,7 +19,7 @@ Float32Matrix = npt.NDArray[np.float32]
 class EmbeddingVector:
     """Validated normalized embedding vector."""
 
-    values: Float32Vector
+    values: Float32Vector = field(repr=False)
     dimension: int
     dtype: str
     model: str
@@ -30,7 +30,7 @@ class EmbeddingVector:
 class EmbeddingBatchResult:
     """Validated embedding vectors for a batch of input texts."""
 
-    vectors: Float32Matrix
+    vectors: Float32Matrix = field(repr=False)
     model: str
     dimension: int
     dtype: str

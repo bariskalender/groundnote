@@ -180,6 +180,16 @@ Phase 5: Embedding, Indexing, and Semantic Retrieval.
 - After Phase 5 smoke tests, Foundry status reported service `Ready`, local service `Reachable`,
   `1` cached model, and `0` loaded models.
 
+## Pre-Phase 6 Audit Notes
+
+- The pre-Phase 6 audit found and fixed privacy-safe representation gaps so model `repr(...)`
+  output no longer includes document text, query text, answer text, or raw vector values.
+- The audit also found a Foundry Local preview SDK load-path issue for
+  `qwen3-embedding-0.6b-generic-cpu:1`. The embedding provider now falls back to the local Foundry
+  daemon on `127.0.0.1` for the same local embedding model variant when direct SDK loading fails.
+- Real embedding smoke after the fix passed with 3 vectors, 1024 dimensions, finite float32 values,
+  and `0` loaded models after unload.
+
 ## Environment Facts
 
 - OS: Microsoft Windows 11 Pro, version 10.0.22621, 64-bit.

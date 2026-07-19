@@ -182,3 +182,14 @@ whose embedding model and embedding version match the active settings.
 Phase 5 returns ranked chunks, scores, and citation metadata only. It does not call a chat model,
 build prompts, or generate natural-language answers. RAG generation remains explicitly deferred to
 Phase 6.
+
+## ADR-0021: Use The Local Foundry Daemon As An Embedding Load Fallback
+
+- Status: Accepted
+- Date: 2026-07-19
+
+During the pre-Phase 6 audit, the installed Foundry Local preview SDK reported the embedding model
+as cached but failed direct SDK loading with a missing model path for the selected CPU variant.
+GroundNote keeps the SDK provider boundary, but the embedding provider may fall back to the
+OpenAI-compatible Foundry Local daemon on `127.0.0.1` for the same local model variant. This is not
+a cloud fallback, does not initialize chat generation, and unloads the embedding model after use.

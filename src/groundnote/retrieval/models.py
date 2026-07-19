@@ -11,7 +11,7 @@ from groundnote.domain import SupportedFileType
 class SemanticQuery:
     """Validated semantic search request."""
 
-    text: str
+    text: str = field(repr=False)
     top_k: int
     minimum_score: float
     document_ids: list[str] | None = None
@@ -27,7 +27,7 @@ class RetrievalResult:
     document_id: str
     chunk_id: str
     chunk_index: int
-    content: str
+    content: str = field(repr=False)
     score: float
     page_number: int | None
     section_title: str | None

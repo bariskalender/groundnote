@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -16,14 +16,14 @@ class ChatMessage:
     """A provider-neutral chat message."""
 
     role: ChatRole
-    content: str
+    content: str = field(repr=False)
 
 
 @dataclass(frozen=True)
 class ChatResult:
     """A provider-neutral chat completion result."""
 
-    text: str
+    text: str = field(repr=False)
     model_alias: str
 
 
@@ -46,6 +46,6 @@ class ModelInfo:
 class EmbeddingBatchResult:
     """Embedding vectors returned as finite float32 arrays."""
 
-    vectors: npt.NDArray[np.float32]
+    vectors: npt.NDArray[np.float32] = field(repr=False)
     model_alias: str
     dimension: int
