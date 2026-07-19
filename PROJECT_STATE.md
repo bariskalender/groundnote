@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 3: Secure Document Validation and Parsing.
+Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
 
 ## Completed Tasks
 
@@ -54,6 +54,22 @@ Phase 3: Secure Document Validation and Parsing.
 - Added safe uploaded-byte writing helper for future UI integration.
 - Added supported-document and document-processing documentation.
 
+### Phase 4
+
+- Added a dedicated `groundnote.chunking` package with provider-neutral contracts and models.
+- Added validated chunking settings with `hybrid-recursive-v1` as the MVP default version.
+- Added deterministic hybrid recursive chunking with paragraph, sentence, whitespace, and hard
+  character fallbacks.
+- Added lightweight English and Turkish sentence splitting heuristics without NLP dependencies.
+- Added overlap between compatible chunks while avoiding PDF page and unrelated heading crossings.
+- Added safe short-fragment merging and warnings for unavoidable undersized chunks.
+- Added source filename, file type, page, heading, source order, chunking version, warnings, and
+  approximate token metadata.
+- Added transaction-safe pre-embedding ingestion that persists document records and chunk rows with
+  null embedding fields.
+- Added a SQLite migration for chunk source metadata.
+- Added chunking and pre-embedding ingestion documentation.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -77,17 +93,31 @@ Phase 3: Secure Document Validation and Parsing.
 - `uv run python scripts/check_foundry.py`
 - `uv run streamlit run src/groundnote/app.py`
 
+## Commands Run In Phase 4
+
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest tests/unit/chunking tests/integration/ingestion -q --basetemp .local-data/pytest-phase4-target`
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase4-full`
+- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase4-cov`
+- `uv run python scripts/check_foundry.py`
+- `foundry status`
+- Targeted chunking and pre-embedding ingestion smoke test.
+- Headless Streamlit startup smoke test.
+
 ## Test Status
 
 - `uv sync`: Passed.
 - `uv run ruff check .`: Passed.
 - `uv run ruff format --check .`: Passed.
 - `uv run mypy src`: Passed.
-- `uv run pytest -m "not foundry"`: Passed, 74 tests passed.
-- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 74 tests passed, 80%
+- `uv run pytest -m "not foundry"`: Passed, 90 tests passed.
+- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 90 tests passed, 83%
   total coverage.
 - Streamlit startup smoke test: Passed.
-- Phase 3 targeted parser and document service tests: Passed, 28 tests passed.
+- Phase 4 targeted chunking and ingestion tests: Passed, 16 tests passed.
 
 ## Model Benchmark Status
 
@@ -107,9 +137,8 @@ Phase 3: Secure Document Validation and Parsing.
   Windows workspace.
 - Foundry Local CLI `0.10.2` uses `foundry server status`; `foundry service status` is not
   recognized in this installed preview version.
-- During the Phase 3 regression check, the Foundry CLI and SDK were detectable, but the local
-  Foundry service reported `Not running`. This did not affect Phase 3 because parsing does not
-  initialize or call Foundry models.
+- Phase 4 did not initialize or call Foundry Local models. The final Phase 4 regression check
+  reported Foundry service `Ready` with `0` loaded models.
 
 ## Environment Facts
 
@@ -121,4 +150,4 @@ Phase 3: Secure Document Validation and Parsing.
 
 ## Next Phase
 
-Phase 4: Hybrid Recursive Chunking and Pre-Embedding Ingestion.
+Phase 5: Embedding, Indexing, and Semantic Retrieval.

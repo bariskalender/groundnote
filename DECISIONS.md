@@ -130,3 +130,25 @@ frameworks are intentionally avoided for the MVP.
 Phase 3 validates, hashes, checks exact duplicates, and parses documents, but it does not create
 chunks, generate embeddings, index documents, retrieve context, or call Foundry Local models. This
 keeps parser safety and privacy concerns isolated before the ingestion pipeline is added.
+
+## ADR-0016: Use Deterministic Hybrid Recursive Chunking
+
+- Status: Accepted
+- Date: 2026-07-19
+
+GroundNote uses a custom deterministic chunker instead of a RAG framework. The chunker preserves
+parsed section boundaries, PDF page numbers, DOCX and Markdown heading metadata, source order, and
+safe warnings. It falls back from paragraphs to lightweight sentence splitting, whitespace
+splitting, and hard character splitting only when needed. This keeps the MVP readable, local, and
+independent from Foundry Local or embedding providers.
+
+## ADR-0017: Persist Pre-Embedding Chunks In Phase 4
+
+- Status: Accepted
+- Date: 2026-07-19
+
+Phase 4 persists document metadata and ordered chunk rows in one SQLite Unit of Work, ending with
+`PENDING_EMBEDDING` status and null embedding fields. This matches the existing Phase 2 schema
+direction and lets Phase 5 focus on embedding generation and indexing. Parser and chunking failures
+roll back the transaction, repeated exact files do not create duplicates, and no document is marked
+`INDEXED` before embeddings exist.

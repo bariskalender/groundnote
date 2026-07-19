@@ -19,6 +19,10 @@ class DocumentChunk(BaseModel):
     character_count: int = Field(ge=0)
     token_estimate: int | None = Field(default=None, ge=0)
     embedding_dimension: int | None = Field(default=None, gt=0)
+    source_start_order: int | None = Field(default=None, ge=0)
+    source_end_order: int | None = Field(default=None, ge=0)
+    chunking_version: str | None = None
+    metadata_json: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @field_validator("created_at")

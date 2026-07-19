@@ -180,10 +180,11 @@ class SQLiteVectorRepository:
                 """
                 INSERT INTO document_chunks (
                     id, document_id, chunk_index, content, page_number, section_title,
-                    character_count, token_estimate, embedding, embedding_dimension,
+                    character_count, token_estimate, source_start_order, source_end_order,
+                    chunking_version, metadata_json, embedding, embedding_dimension,
                     embedding_dtype, created_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 [_chunk_values(chunk, embedding) for chunk, embedding in chunks],
             )
@@ -275,6 +276,10 @@ def _chunk_values(
         chunk.section_title,
         chunk.character_count,
         chunk.token_estimate,
+        chunk.source_start_order,
+        chunk.source_end_order,
+        chunk.chunking_version,
+        chunk.metadata_json,
         embedding.data if embedding is not None else None,
         embedding.dimension if embedding is not None else chunk.embedding_dimension,
         embedding.dtype if embedding is not None else None,
@@ -313,6 +318,10 @@ def _chunk_from_row(row: sqlite3.Row) -> DocumentChunk:
         character_count=int(row["character_count"]),
         token_estimate=_optional_int(row["token_estimate"]),
         embedding_dimension=_optional_int(row["embedding_dimension"]),
+        source_start_order=_optional_int(row["source_start_order"]),
+        source_end_order=_optional_int(row["source_end_order"]),
+        chunking_version=_optional_str(row["chunking_version"]),
+        metadata_json=_optional_str(row["metadata_json"]),
         created_at=_datetime_from_text(str(row["created_at"])),
     )
 

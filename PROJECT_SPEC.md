@@ -88,6 +88,7 @@ Implemented foundation so far:
 - Float32 BLOB embedding serialization.
 - Secure validation, hashing, duplicate pre-checking, and text extraction for PDF, DOCX, TXT, and
   Markdown.
+- Deterministic hybrid recursive chunking and transaction-safe pre-embedding ingestion.
 
 ## Non-MVP Features
 

@@ -87,7 +87,7 @@ class Settings(BaseSettings):
             "GROUNDNOTE_MIN_CHUNK_CHARS",
         ),
     )
-    chunking_version: str = "recursive-v1"
+    chunking_version: str = "hybrid-recursive-v1"
 
     maximum_output_tokens: int = 512
     temperature: float = 0.2
