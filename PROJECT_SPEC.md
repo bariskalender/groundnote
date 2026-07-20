@@ -93,6 +93,10 @@ Implemented foundation so far:
   retrieval.
 - Grounded single-turn RAG generation with prompt-injection defenses, citation validation, and
   Turkish/English response-language handling.
+- Streamlit Documents and Ask GroundNote views with secure upload confirmation, synchronous local
+  indexing feedback, safe document status, trusted citations, and insufficient-evidence display.
+- Controlled rerun/session state with no uploaded bytes, vectors, database transactions, model
+  objects, or persistent chat history stored in the session.
 
 ## Non-MVP Features
 

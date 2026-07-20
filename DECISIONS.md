@@ -230,3 +230,32 @@ loading/generation outside those write transactions. A document becomes `INDEXIN
 work starts, remains non-searchable until all embeddings are saved and the document is marked
 `INDEXED`, and becomes `FAILED` with a safe message if embedding generation fails. Retrieval still
 loads only `INDEXED` documents with compatible embedding model/version metadata.
+
+## ADR-0025: Cache Stateless UI Composition, Not Private Request Data
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Phase 7 uses one explicit application context to compose settings, database factories, Foundry
+providers, ingestion, indexing, retrieval, RAG, and thin UI workflows. Streamlit caches this
+stateless composition as a resource, but context construction does not load a model. SQLite
+connections, transactions, uploaded bytes, extracted text, embeddings, prompts, and complete answer
+caches are never stored in the cached resource.
+
+Controlled `st.session_state` values contain operation flags, safe result models, selected source
+IDs, and at most the latest single-turn question and answer. They do not form persistent chat
+history and do not contain uploaded bytes, vectors, provider models, connections, or transactions.
+
+## ADR-0026: Treat Explicit Model Evidence Refusals As Insufficient Evidence
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Manual Streamlit testing showed that a local model can retrieve a weakly related chunk, explicitly
+state that the supplied documents lack enough evidence, and still append a required citation. A
+citation alone must not turn that refusal into a grounded-success label.
+
+GroundNote now recognizes a small conservative set of explicit English and Turkish
+insufficient-evidence phrases after normal answer validation. Such output is replaced with the
+existing deterministic language-matched insufficient-evidence response, all citations are removed,
+and the UI displays an informational no-evidence state. Normal grounded answers remain unchanged.

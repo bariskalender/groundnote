@@ -65,6 +65,7 @@ class PreEmbeddingIngestionService:
                 file_path,
                 original_filename=original_filename,
                 allowed_directory=allowed_directory,
+                stored_filename=file_path.name,
             )
             chunking_result = self.chunker.chunk(parsed, chunking_settings)
             document_id = str(uuid.uuid4())

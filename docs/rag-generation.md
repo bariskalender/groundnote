@@ -43,6 +43,11 @@ contains at least one valid citation from the supplied context.
 If no usable context exists, GroundNote does not call the chat model. It returns a deterministic
 message explaining that the answer was not found in indexed documents. This is not a system error.
 
+If the model receives retrieved context but explicitly states in English or Turkish that the
+sources do not contain enough evidence, GroundNote also converts that output to the deterministic
+insufficient-evidence result. Any citation appended to that refusal is removed so it cannot be
+presented as a grounded-success answer.
+
 ## Scope And Limitations
 
 - No final Streamlit chat UI is implemented in Phase 6.

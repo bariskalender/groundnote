@@ -7,7 +7,14 @@ from pathlib import Path
 from typing import Protocol
 
 from groundnote.config import Settings
-from groundnote.documents.errors import DocumentError, DuplicateDocumentError
+from groundnote.documents.errors import (
+    DocumentError,
+    DuplicateDocumentError,
+    EmptyDocumentError,
+    FileTooLargeError,
+    UnsafeFileError,
+    UnsupportedFileTypeError,
+)
 from groundnote.documents.hashing import calculate_sha256
 from groundnote.documents.models import DuplicateCheckResult, DuplicateType, ParsedDocument
 from groundnote.documents.registry import ParserRegistry, default_parser_registry
@@ -72,6 +79,7 @@ class DocumentProcessingService:
         *,
         original_filename: str,
         allowed_directory: Path,
+        stored_filename: str | None = None,
     ) -> ParsedDocument:
         started = time.perf_counter()
         safe_name = safe_display_filename(original_filename)
@@ -82,7 +90,7 @@ class DocumentProcessingService:
             settings=self.settings,
         )
         if not validation.is_valid or validation.detected_file_type is None:
-            raise DocumentError(validation.user_message)
+            raise _validation_error(validation.error_code, validation.user_message)
         sha256 = calculate_sha256(file_path)
         duplicate = self.check_duplicate(sha256)
         if duplicate.is_duplicate:
@@ -94,14 +102,21 @@ class DocumentProcessingService:
                 warning_count=len(validation.warnings),
                 duration_ms=_elapsed_ms(started),
             )
-            raise DuplicateDocumentError(duplicate.user_message)
-        stored_filename = generate_safe_stored_filename(safe_name)
+            raise DuplicateDocumentError(
+                duplicate.user_message,
+                existing_document_id=duplicate.existing_document_id,
+            )
+        resolved_stored_filename = (
+            _validate_stored_filename(stored_filename)
+            if stored_filename is not None
+            else generate_safe_stored_filename(safe_name)
+        )
         parser = self.registry.get(validation.detected_file_type)
         try:
             parsed = parser.parse(
                 file_path,
                 original_filename=safe_name,
-                stored_filename=stored_filename,
+                stored_filename=resolved_stored_filename,
                 sha256=sha256,
                 file_size_bytes=validation.size_bytes,
             )
@@ -144,3 +159,21 @@ def make_document_processing_service(
 
 def _elapsed_ms(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 3)
+
+
+def _validation_error(error_code: str | None, message: str | None) -> DocumentError:
+    error_types: dict[str, type[DocumentError]] = {
+        UnsupportedFileTypeError.error_code: UnsupportedFileTypeError,
+        FileTooLargeError.error_code: FileTooLargeError,
+        EmptyDocumentError.error_code: EmptyDocumentError,
+        UnsafeFileError.error_code: UnsafeFileError,
+    }
+    error_type = error_types.get(error_code or "", DocumentError)
+    return error_type(message)
+
+
+def _validate_stored_filename(filename: str) -> str:
+    safe_name = safe_display_filename(filename)
+    if safe_name != filename:
+        raise UnsafeFileError("The stored filename is not safe.")
+    return safe_name

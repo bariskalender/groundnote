@@ -109,6 +109,15 @@ class RagService:
             language=language,
             citation_map=citation_map,
         )
+        if indicates_insufficient_evidence(answer_text, language=language):
+            answer = self._insufficient_evidence_answer(
+                language=language,
+                retrieved_count=retrieval.returned_count,
+                duration_ms=self._duration(started),
+                warnings=[*warnings, "model_reported_insufficient_evidence"],
+            )
+            self._log_completion(query, answer)
+            return answer
         citations = [citation_map[citation_id] for citation_id in citation_ids]
         duration_ms = self._duration(started)
         answer = RagAnswer(
@@ -173,7 +182,16 @@ class RagService:
         except Exception as exc:
             raise ChatGenerationError("Local chat generation failed.") from exc
         finally:
+            self._unload_chat_model()
+
+    def _unload_chat_model(self) -> None:
+        try:
             self.chat_provider.unload()
+        except Exception:
+            self.logger.warning(
+                "chat_model_unload_failed",
+                model=self.chat_provider.model_alias,
+            )
 
     def _insufficient_evidence_answer(
         self,
@@ -251,3 +269,26 @@ def insufficient_evidence_text(language: str) -> str:
         "I could not find the answer in the indexed documents. "
         "Try refining the question or adding relevant documents."
     )
+
+
+def indicates_insufficient_evidence(answer: str, *, language: str) -> bool:
+    """Recognize an explicit model refusal and avoid presenting it as grounded."""
+    normalized = " ".join(answer.casefold().split())
+    english_markers = (
+        "insufficient evidence",
+        "not enough evidence",
+        "do not contain enough evidence",
+        "does not contain enough evidence",
+        "could not find the answer",
+        "cannot find the answer",
+        "answer was not found",
+    )
+    turkish_markers = (
+        "yeterli kanıt yok",
+        "yeterli bilgi yok",
+        "yeterli kanıt bulunmuyor",
+        "belgelerde bulunamadı",
+        "cevaplamak için yeterli",
+    )
+    markers = turkish_markers if language == "tr" else english_markers
+    return any(marker in normalized for marker in markers)

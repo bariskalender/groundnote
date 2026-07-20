@@ -6,7 +6,11 @@ from groundnote.ai.fakes import FakeChatProvider
 from groundnote.config import Settings
 from groundnote.domain import SupportedFileType
 from groundnote.rag import CitationValidationError, InvalidChatResponseError, RagRequest, RagService
-from groundnote.rag.service import insufficient_evidence_text, validate_answer_text
+from groundnote.rag.service import (
+    indicates_insufficient_evidence,
+    insufficient_evidence_text,
+    validate_answer_text,
+)
 from groundnote.retrieval.models import RetrievalResponse, RetrievalResult, SemanticQuery
 
 
@@ -90,6 +94,22 @@ def test_grounded_answer_invokes_chat_once_and_maps_citations() -> None:
     assert chat.requests[0].system_prompt != chat.requests[0].user_prompt
 
 
+def test_model_refusal_with_citation_becomes_deterministic_insufficient_evidence() -> None:
+    chat = FakeChatProvider(responses=["The documents do not contain enough evidence. [S1]"])
+    service = RagService(
+        settings=Settings(),
+        retrieval_service=FakeRetrievalService([retrieval_result()]),
+        chat_provider=chat,
+    )
+
+    answer = service.answer(RagRequest(query="What is the boiling point of tungsten?"))
+
+    assert answer.grounded is False
+    assert answer.insufficient_evidence is True
+    assert answer.citations == []
+    assert "model_reported_insufficient_evidence" in answer.warnings
+
+
 def test_invalid_citations_trigger_one_repair_then_success() -> None:
     chat = FakeChatProvider(
         responses=[
@@ -142,6 +162,21 @@ def test_prompt_injection_context_does_not_enter_system_prompt() -> None:
 def test_turkish_and_english_insufficient_evidence_text() -> None:
     assert "bulunamadı" in insufficient_evidence_text("tr")
     assert "indexed documents" in insufficient_evidence_text("en")
+
+
+@pytest.mark.parametrize(
+    ("answer", "language"),
+    [
+        ("The documents do not contain enough evidence. [S1]", "en"),
+        ("Bu soruyu cevaplamak için yeterli bilgi yok. [S1]", "tr"),
+    ],
+)
+def test_explicit_model_insufficient_evidence_is_detected(answer: str, language: str) -> None:
+    assert indicates_insufficient_evidence(answer, language=language) is True
+
+
+def test_normal_grounded_answer_is_not_an_insufficient_evidence_signal() -> None:
+    assert indicates_insufficient_evidence("SQLite stores embeddings. [S1]", language="en") is False
 
 
 def test_answer_validation_rejects_bad_outputs_and_unknown_citations() -> None:

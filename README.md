@@ -8,10 +8,9 @@ GroundNote is a local document assistant mainly designed for university students
 help students study from lecture notes, course documents, and personal study materials without
 sending those files to a cloud AI service.
 
-In the planned application, users will upload PDF, DOCX, TXT, and Markdown files, then ask
-questions about the contents of those documents. GroundNote is still under development. The backend
-RAG pipeline is implemented, but the final Streamlit upload, indexing, Knowledge Base, and chat
-interface is not implemented yet.
+Users can upload PDF, DOCX, TXT, and Markdown files, index them locally, and ask questions about
+their contents through the Streamlit interface. The complete Knowledge Base management workflow,
+including deletion and re-index controls, remains future work.
 
 ## Why GroundNote?
 
@@ -35,6 +34,8 @@ interface is not implemented yet.
 - Deterministic hybrid recursive chunking and pre-embedding ingestion.
 - Local embedding indexing and semantic retrieval.
 - Grounded single-turn RAG answer generation with citations.
+- Streamlit document upload, indexing status, grounded Q&A, and trusted citation interface.
+- Safe duplicate and insufficient-evidence presentation.
 - Unit tests.
 - Ruff and mypy checks.
 
@@ -59,14 +60,9 @@ hardware.
 
 ## Planned Features
 
-- Drag-and-drop document upload.
-- Streamlit upload and indexing workflow.
-- Local SQLite knowledge base.
-- RAG answer generation using retrieved context.
-- Source filename and page number display.
 - Document deletion and re-indexing.
-- English interface.
-- Answers in the same language as the user question.
+- Complete Knowledge Base management controls.
+- Additional packaging and final demonstration polish.
 
 ## Technology Stack
 
@@ -101,18 +97,22 @@ uv run pytest -m "not foundry"
 - Phase 5 completed locally.
 - Phase 6 completed locally.
 - Pre-Phase 7 UI readiness audit completed locally.
+- Phase 7 completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
 - Semantic retrieval returns ranked chunks with citation metadata.
 - Grounded single-turn RAG answer generation is implemented with citation validation.
-- The final Streamlit chat/upload interface is not implemented yet.
-- Persistent conversation memory is not implemented yet.
+- The Streamlit interface supports secure upload, local indexing, document status, single-turn
+  questions, trusted citations, and insufficient-evidence results.
+- Persistent conversation memory is intentionally not implemented.
+- Document deletion, re-indexing controls, and full Knowledge Base management are not implemented.
 
 See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
 `docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
 `docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`, and
-`docs/citations-and-language.md` for the current behavior and limitations.
+`docs/citations-and-language.md`, `docs/streamlit-interface.md`, and `docs/demo-workflow.md` for the
+current behavior and limitations.
 
 ## Privacy
 
@@ -122,6 +122,9 @@ User documents must not be committed to Git.
 
 Local models can still make mistakes. Users should verify high-stakes answers against the cited
 source documents.
+
+The interface is English in Phase 7. Answers continue to follow the language of each independent
+question; no persistent or history-aware chat is used.
 
 ## License
 

@@ -52,7 +52,7 @@ class DocumentIndexingService:
             self._mark_failed(document_id, "Embedding generation failed during indexing.")
             raise exc
         finally:
-            self.embedding_service.unload()
+            self._unload_embedding_model()
 
         embedded_at = datetime.now(UTC)
         with self.unit_of_work_factory() as unit_of_work:
@@ -154,6 +154,15 @@ class DocumentIndexingService:
                 )
             )
             unit_of_work.commit()
+
+    def _unload_embedding_model(self) -> None:
+        try:
+            self.embedding_service.unload()
+        except Exception:
+            self.logger.warning(
+                "embedding_model_unload_failed",
+                embedding_model=self.settings.embedding_model,
+            )
 
     def clear_embeddings(self, document_id: str) -> None:
         """Clear embeddings for one document and return it to PENDING_EMBEDDING."""

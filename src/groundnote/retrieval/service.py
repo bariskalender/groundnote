@@ -67,7 +67,7 @@ class SemanticRetrievalService:
         try:
             query_vector = self.embedding_service.embed_query(query.text)
         finally:
-            self.embedding_service.unload()
+            self._unload_embedding_model()
         with self.connection_factory.open() as connection:
             repository = SQLiteVectorRepository(connection)
             try:
@@ -131,6 +131,15 @@ class SemanticRetrievalService:
             duration_ms=duration_ms,
             warnings=[],
         )
+
+    def _unload_embedding_model(self) -> None:
+        try:
+            self.embedding_service.unload()
+        except Exception:
+            self.logger.warning(
+                "embedding_model_unload_failed",
+                embedding_model=self.settings.embedding_model,
+            )
 
 
 def _to_result(candidate: SearchableChunkEmbedding, score: float) -> RetrievalResult:

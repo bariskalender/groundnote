@@ -10,8 +10,8 @@
 | 5 | Embedding, Indexing, and Semantic Retrieval | Complete |
 | 6 | Foundry Local chat provider and RAG answer generation | Complete |
 | Audit | Pre-Phase 7 UI readiness audit | Complete |
-| 7 | Streamlit study workflow UI | Not started |
-| 8 | Polishing, documentation, packaging notes, and final QA | Not started |
+| 7 | Streamlit Upload, Indexing, and Chat Interface | Complete |
+| 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Not started |
 
 ## Phase 0 Acceptance Notes
 
@@ -107,4 +107,23 @@
   indexing, retrieval, RAG generation, citations, privacy protections, and logging are ready for a
   Phase 7 UI adapter.
 - Added `docs/audits/pre-phase-7-ui-readiness-audit.md`.
-- Phase 7 remains not started.
+- At audit completion, Phase 7 had not started.
+
+## Phase 7 Acceptance Notes
+
+- Added a wide Streamlit application with Documents and Ask GroundNote navigation.
+- Added explicit one-file upload confirmation for PDF, DOCX, TXT, and Markdown with aligned 50 MB
+  Streamlit and backend limits.
+- Connected safe uploaded-byte writing, duplicate detection, ingestion, chunking, persistence, local
+  embedding indexing, document status, RAG answers, and trusted citations through high-level
+  workflows.
+- Added indexed-document and file-type source filters without UI SQL or direct provider calls.
+- Added deterministic safe error mapping, duplicate presentation, insufficient-evidence behavior,
+  and local-model lifecycle feedback.
+- Added controlled session state containing only safe latest-result data; no persistent or
+  history-aware chat was added.
+- Verified fake-provider and real Foundry Local UI-backend flows, Streamlit application behavior,
+  rerun safety, duplicate handling, and model cleanup.
+- Added `docs/streamlit-interface.md` and `docs/demo-workflow.md`.
+- No deletion UI, re-index UI, full Knowledge Base management, OCR, cloud inference, or Phase 8
+  work was implemented.

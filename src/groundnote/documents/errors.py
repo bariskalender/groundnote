@@ -57,6 +57,15 @@ class DuplicateDocumentError(DocumentError):
     error_code = "duplicate_document"
     user_message = "This file is an exact duplicate of an existing document."
 
+    def __init__(
+        self,
+        user_message: str | None = None,
+        *,
+        existing_document_id: str | None = None,
+    ) -> None:
+        super().__init__(user_message)
+        self.existing_document_id = existing_document_id
+
 
 class ParserNotFoundError(DocumentError):
     error_code = "parser_not_found"

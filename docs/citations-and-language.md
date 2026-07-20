@@ -13,6 +13,10 @@ If citations are required and the first generated answer contains no valid citat
 performs at most one citation-repair generation. If that also fails, the service returns a safe
 citation validation error instead of inventing sources.
 
+A valid citation token does not override an explicit model statement that the sources lack enough
+evidence. Such responses become deterministic insufficient-evidence results with no displayed
+citations.
+
 ## Display Labels
 
 - PDF: `filename.pdf — page 3`

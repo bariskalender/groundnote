@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Pre-Phase 7 UI readiness audit complete. Phase 7 has not started.
+Phase 7 complete. Phase 8 has not started.
 
 ## Completed Tasks
 
@@ -116,6 +116,33 @@ Pre-Phase 7 UI readiness audit complete. Phase 7 has not started.
 - Updated indexing documentation to describe the short-transaction strategy and `FAILED` indexing
   behavior.
 
+### Phase 7
+
+- Replaced the minimal shell with a wide Streamlit application containing Documents and Ask
+  GroundNote views.
+- Added an explicit application context for settings, database factories, Foundry providers,
+  ingestion, indexing, retrieval, RAG, status checking, and UI workflows without startup model
+  loading.
+- Added one-file PDF, DOCX, TXT, and Markdown upload confirmation with aligned 50 MB Streamlit and
+  backend limits.
+- Added safe local uploaded-byte writing, exact duplicate presentation and cleanup, parsing,
+  chunking, persistence, local embedding indexing, and safe success summaries.
+- Ensured the persisted stored filename matches the actual collision-resistant local upload file.
+- Added user-safe document status summaries and read-only refresh behavior.
+- Added indexed-document and file-type filters, single-turn chat input, grounded Markdown answers,
+  trusted structured citations, and insufficient-evidence notices.
+- Added a conservative conversion from explicit model evidence refusals to deterministic
+  citation-free insufficient-evidence answers.
+- Added controlled Streamlit session state without bytes, vectors, model instances, connections,
+  transactions, or persistent conversation history.
+- Added safe Foundry service status reporting without automatic service start, model loading, or
+  download.
+- Made model unload failures warning-only after successful embedding or chat operations so cleanup
+  issues do not corrupt indexed state or valid answers.
+- Added UI unit, integration, Streamlit AppTest, fake-provider pipeline, and real local Foundry smoke
+  coverage.
+- Added Streamlit interface and demonstration workflow documentation.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -222,8 +249,41 @@ Pre-Phase 7 UI readiness audit complete. Phase 7 has not started.
 - Final `uv run ruff check .`, `uv run mypy src`, and
   `uv run pytest -m "not foundry" --basetemp .local-data/pytest-prephase7-final`
 
+## Commands Run In Phase 7
+
+- Initial Git status, branch, remote, fetch, synchronization, history, and tracked-file checks.
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- Targeted UI unit, integration, Streamlit AppTest, RAG evidence, and model-lifecycle tests.
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase7-final`
+- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase7-cov-final`
+- `uv run python scripts/smoke_ui_pipeline.py`
+- `foundry --version`
+- `foundry server status`
+- `foundry status`
+- `uv run python scripts/check_foundry.py`
+- `uv run python scripts/smoke_ui_real.py`
+- `uv run streamlit run src/groundnote/app.py --server.headless true --server.port 8507`
+- Manual in-app browser smoke for upload, indexing, Ready status, grounded answer, citation,
+  insufficient evidence, duplicate handling, rerun behavior, and safe console output.
+- Security and privacy source/tracked-file searches with `rg` and Git.
+
 ## Test Status
 
+- Phase 7 UI unit/integration/Streamlit target: Passed.
+- Phase 7 fake-provider UI pipeline: Passed with one indexed chunk, one trusted citation,
+  insufficient evidence, duplicate detection, persistence after context restart, and no chat
+  history.
+- Phase 7 real Foundry UI-backend smoke: Passed with 1024-dimensional local embeddings, English and
+  Turkish grounded answers, trusted citations, citation-free insufficient evidence, and zero loaded
+  models afterward.
+- Phase 7 manual Streamlit smoke: Passed for application layout, 50 MB upload limit, local upload,
+  synchronous indexing, Ready status, grounded answer, citation display, insufficient evidence,
+  duplicate handling, rerun behavior, and no raw browser error.
+- Phase 7 `uv run pytest -m "not foundry"`: Passed, 185 tests passed.
+- Phase 7 coverage: Passed, 84% total coverage.
 - Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
 - Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
 - `uv sync`: Passed.
@@ -279,6 +339,9 @@ Pre-Phase 7 UI readiness audit complete. Phase 7 has not started.
 - `phi-3.5-mini` was downloaded for the Phase 6 real chat smoke because it was not cached at the
   start of real chat testing. `qwen2.5-0.5b` was also downloaded and tested as a low-resource
   fallback, but the final successful smoke used the preferred `phi-3.5-mini` model.
+- Phase 7 model operations are synchronous. The UI remains intentionally simple and does not add a
+  background job queue; local model inference can take several seconds.
+- Phase 7 does not include document deletion, re-index controls, or full Knowledge Base management.
 
 ## Pre-Phase 6 Audit Notes
 
@@ -300,4 +363,4 @@ Pre-Phase 7 UI readiness audit complete. Phase 7 has not started.
 
 ## Next Phase
 
-Phase 7: Streamlit Upload, Indexing, and Chat Interface.
+Phase 8: Knowledge Base Management, Delete, Re-index, and Index Controls.
