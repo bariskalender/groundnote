@@ -37,8 +37,8 @@ The simplified sidebar contains:
 - Foundry Local status (`Ready`, `Not running`, `Unavailable`, or `Unknown`);
 - a small local-only and OCR notice.
 
-The main area is the conversation. It shows assistant/user messages, compact citations, optional
-technical details, and a bottom chat input.
+The main area is the conversation. It shows assistant/user messages, compact citations, and a
+bottom chat input. Technical retrieval details are hidden from the normal answer flow.
 
 ## Documents View
 
@@ -68,6 +68,10 @@ text, and vectors are not shown.
 Exact duplicates are not parsed, chunked, or indexed again. The temporary duplicate copy is removed
 and the existing safe filename and status are displayed as an informational result.
 
+If a PDF appears to be image-only and no text can be extracted, it is not embedded and is not marked
+ready. The UI explains that OCR is not available in the MVP and asks for a text-based PDF or another
+supported format.
+
 One failed file does not prevent later valid files from processing. Exact duplicates are reported
 per file and are not re-indexed. A small **Retry** action appears beside the affected failed
 document. Failed documents that reached local persistence reuse their existing document and chunk
@@ -95,8 +99,14 @@ Each submitted document question:
 6. keep or unload the chat model according to the selected performance mode;
 7. validate citations and render the answer.
 
-Greetings, thanks, and app-help messages return immediate localized responses without retrieval,
-embedding, or chat model loading.
+Empty input, unclear short input, greetings, thanks, and app-help messages return immediate
+localized responses without retrieval, embedding, or chat model loading. Examples such as `A`, `?`,
+`asd`, `asdf`, and `aaaa` are treated as unclear. Short automotive and technical terms such as
+`W123`, `NVH`, `CRC`, `VIN`, `HTTP`, and `API` remain valid document queries.
+
+If no document is ready, GroundNote answers locally that the user should upload a document or wait
+for processing. If at least one document is ready, questions can proceed against ready documents
+while later uploads are still processing.
 
 Conversation history is stored only in `st.session_state`. It is not persisted to SQLite.
 
@@ -117,6 +127,10 @@ model explicitly reports that the supplied sources lack enough evidence, GroundN
 deterministic insufficient-evidence message with no citations and no grounded-success label.
 Turkish questions continue to produce Turkish answers and English questions produce English
 answers.
+
+The answer postprocessor detects repeated words, repeated phrases, repeated citation markers, and
+runaway tails. It trims a useful cited prefix when possible, retries once with stricter instructions
+when needed, and otherwise returns a localized safe repetition message.
 
 ## Session And Rerun Behavior
 
@@ -158,6 +172,8 @@ only privacy-safe event names, categories, counts, statuses, and durations.
 - Selecting a file, starting the app, and refreshing status load no model.
 - Balanced and Fast modes may keep models warm after first use.
 - Memory saver unloads models after each operation.
+- Sequential uploads reuse a warm embedding provider inside the session when the selected mode
+  allows it.
 - Model inference does not run while a SQLite write transaction is held.
 - Logs contain safe counts, categories, model names, statuses, and durations—not private content.
 
@@ -204,3 +220,23 @@ Measurements are specific to the current development machine and short smoke fix
 
 Phase 7 is complete only when its tests, real local smoke, manual Streamlit smoke, documentation,
 and quality checks pass. Phase 8 has not started.
+
+## Phase 7.2 Manual Measurements
+
+Phase 7.2 real-document smoke used cached Foundry Local models and the user's local MB
+nomenclature and Turkish design PDFs. Representative measured results:
+
+| Operation | Measured time |
+| --- | ---: |
+| Invalid inputs `A`, `?`, `asdf` | 0.000 s |
+| Greeting `Merhaba` | 0.000 s |
+| Mercedes chassis answer, cold retrieval | 5.658 s |
+| Mercedes chassis answer, warm retrieval | 0.437 s |
+| Mercedes engine answer, warm retrieval | 0.466 s |
+| Turkish design answer, warm retrieval | 0.430 s |
+| Unrelated World Cup question | 0.546 s |
+| Small TXT fact answer | 0.578 s |
+
+The unrelated World Cup question no longer reaches chat generation when the retrieved context lacks
+plausible overlap with the question. Medium PDF indexing is still synchronous and CPU-bound; the
+same smoke measured 98.081 s for the MB PDF and 107.257 s for the Turkish design PDF.

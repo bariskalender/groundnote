@@ -23,6 +23,8 @@ Use an original, non-private PDF, DOCX, TXT, or Markdown document for demonstrat
 8. Observe the insufficient-evidence notice with no invented citation when the sources do not
    support an answer.
 9. Ask `merhaba nasılsın` or `hello` and observe the immediate citation-free app response.
+10. Ask `A`, `?`, and `asdf` and observe the immediate clarification response with no model call.
+11. Ask an unrelated question and observe the insufficient-evidence response with no citation spam.
 10. Optionally submit the same file again and observe the informational duplicate result without
    re-indexing.
 

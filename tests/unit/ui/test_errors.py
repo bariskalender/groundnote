@@ -72,3 +72,12 @@ def test_unexpected_error_has_localized_reset_message() -> None:
         "İşlem sırasında bir sorun oluştu. Durum sıfırlandı; tekrar deneyebilirsiniz."
     )
     assert "private internal detail" not in message.message
+
+
+def test_no_extractable_text_uses_image_only_pdf_message() -> None:
+    english = map_exception(NoExtractableTextError(), "en")
+    turkish = map_exception(NoExtractableTextError(), "tr")
+
+    assert "image-based" in english.message
+    assert "OCR" in english.message
+    assert "görüntü tabanlı" in turkish.message

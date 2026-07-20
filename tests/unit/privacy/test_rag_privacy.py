@@ -39,7 +39,7 @@ def test_rag_models_hide_private_text_in_repr() -> None:
         insufficient_evidence=False,
         response_language="en",
         model="fake",
-        prompt_version="grounded-rag-v1",
+        prompt_version="grounded-rag-v2",
         retrieved_count=1,
         used_context_count=1,
         warnings=[],

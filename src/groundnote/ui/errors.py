@@ -35,6 +35,7 @@ from groundnote.rag import (
     InvalidChatResponseError,
     RagError,
     RagRetrievalError,
+    RepeatingGenerationError,
 )
 from groundnote.storage import MigrationError, StorageError
 from groundnote.utils import safe_log_warning
@@ -159,12 +160,14 @@ def map_exception(error: BaseException, language: str = "en") -> UiMessage:
             language,
             (
                 "No readable text",
-                "No readable text could be extracted. OCR is not supported in this version.",
+                "This PDF appears to be image-based. OCR is not available in the MVP, so text "
+                "could not be extracted.",
                 "Use a text-based PDF or another supported document format.",
             ),
             (
                 "Okunabilir metin yok",
-                "Okunabilir metin çıkarılamadı. Bu sürümde OCR desteklenmiyor.",
+                "Bu PDF görüntü tabanlı görünüyor. MVP sürümünde OCR olmadığı için metin "
+                "çıkarılamadı.",
                 "Metin tabanlı PDF veya desteklenen başka bir belge biçimi kullanın.",
             ),
             MessageSeverity.WARNING,
@@ -347,6 +350,23 @@ def map_exception(error: BaseException, language: str = "en") -> UiMessage:
             ("Search failed", "GroundNote could not search the local document index.", None),
             ("Arama başarısız", "GroundNote yerel belge indeksinde arama yapamadı.", None),
             MessageSeverity.ERROR,
+        )
+    if isinstance(error, RepeatingGenerationError):
+        return _message(
+            language,
+            (
+                "Repeating answer detected",
+                "A repeating generation was detected while creating the answer. "
+                "Please try a narrower question.",
+                None,
+            ),
+            (
+                "Tekrarlayan yanıt algılandı",
+                "Yanıt oluşturulurken tekrar eden bir çıktı algılandı. Lütfen soruyu biraz "
+                "daha daraltarak tekrar deneyin.",
+                None,
+            ),
+            MessageSeverity.WARNING,
         )
     if isinstance(error, (ChatGenerationError, InvalidChatResponseError)):
         return _message(

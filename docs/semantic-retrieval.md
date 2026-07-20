@@ -3,6 +3,10 @@
 GroundNote retrieves local document chunks with hybrid semantic and lexical ranking. It returns
 ranked source chunks and citation metadata. RAG generation uses these results for grounded answers.
 
+In Phase 7.2, RAG skips chat generation when the best returned score is still below the configured
+minimum evidence threshold. This keeps unrelated questions fast and avoids presenting weak context
+as a grounded answer.
+
 ## Query Embedding
 
 Queries are trimmed and embedded with the same configured Foundry Local embedding model used for

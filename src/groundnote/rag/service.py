@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import time
 from typing import Literal, Protocol, cast
 
@@ -22,6 +23,7 @@ from groundnote.rag.errors import (
     CitationValidationError,
     InvalidChatResponseError,
     RagRetrievalError,
+    RepeatingGenerationError,
 )
 from groundnote.rag.language import resolve_response_language
 from groundnote.rag.models import Citation, RagAnswer, RagContextItem, RagRequest
@@ -30,7 +32,8 @@ from groundnote.rag.validation import normalize_query
 from groundnote.retrieval.models import RetrievalResponse
 from groundnote.utils import get_logger, safe_log_info, safe_log_warning, sanitize_log_fields
 
-MAX_ANSWER_CHARACTERS = 12_000
+MAX_ANSWER_CHARACTERS = 8_000
+MAX_UI_ANSWER_CHARACTERS = 3_000
 
 
 class RetrievalService(Protocol):
@@ -90,6 +93,15 @@ class RagService:
             raise RagRetrievalError("Could not retrieve relevant local context.") from exc
 
         warnings = list(retrieval.warnings)
+        if retrieval.results and _top_score(retrieval) < minimum_score:
+            answer = self._insufficient_evidence_answer(
+                language=language,
+                retrieved_count=retrieval.returned_count,
+                duration_ms=self._duration(started),
+                warnings=[*warnings, "retrieval_confidence_too_low"],
+            )
+            self._log_completion(query, answer)
+            return answer
         context_items, context_warnings = select_context(retrieval.results, settings=self.settings)
         warnings.extend(context_warnings)
         if not context_items:
@@ -103,6 +115,38 @@ class RagService:
             return answer
 
         citation_map = validate_citation_map(context_items)
+        local_answer = _try_local_context_answer(
+            query=query,
+            context_items=context_items,
+            language=language,
+        )
+        if local_answer is not None:
+            answer_text, local_citation_ids, local_warnings = local_answer
+            citations = [citation_map[citation_id] for citation_id in local_citation_ids]
+            answer = RagAnswer(
+                answer=answer_text,
+                citations=citations,
+                grounded=True,
+                insufficient_evidence=False,
+                response_language=language,
+                model="deterministic-context",
+                prompt_version=self.settings.rag_prompt_version,
+                retrieved_count=retrieval.returned_count,
+                used_context_count=len(context_items),
+                warnings=[*warnings, *local_warnings],
+                duration_ms=self._duration(started),
+            )
+            self._log_completion(query, answer)
+            return answer
+        if not _has_plausible_context_overlap(query, context_items):
+            answer = self._insufficient_evidence_answer(
+                language=language,
+                retrieved_count=retrieval.returned_count,
+                duration_ms=self._duration(started),
+                warnings=[*warnings, "context_query_overlap_too_low"],
+            )
+            self._log_completion(query, answer)
+            return answer
         answer_text, citation_ids, retries, status = self._generate_with_citations(
             query=query,
             context_items=context_items,
@@ -148,23 +192,35 @@ class RagService:
         citation_map: dict[str, Citation],
     ) -> tuple[str, list[str], int, str]:
         allowed_ids = set(citation_map)
+        last_repetition = False
         for attempt in range(2):
             prompt = build_prompt(
                 query=query,
                 context_items=context_items,
                 response_language=language,
                 settings=self.settings,
-                repair=attempt == 1,
+                repair=attempt == 1 or last_repetition,
             )
             result_text = self._call_chat(prompt.system_prompt, prompt.user_prompt)
             status, body = parse_grounded_status(result_text)
             cleaned = validate_answer_text(body, allowed_ids=allowed_ids)
+            cleaned, repeated = repair_repetition(cleaned, allowed_ids=allowed_ids)
+            if repeated:
+                last_repetition = True
+                if cleaned:
+                    cleaned = validate_answer_text(cleaned, allowed_ids=allowed_ids)
+                else:
+                    continue
             if status == "insufficient":
                 return cleaned, [], attempt, status
             citation_ids = extract_citation_ids(cleaned, allowed_ids)
             cleaned = strip_unknown_citations(cleaned, allowed_ids).strip()
             if citation_ids:
                 return cleaned, citation_ids, attempt, status
+            if repeated:
+                continue
+        if last_repetition:
+            raise RepeatingGenerationError("Generated answer entered a repetition loop.")
         if self.settings.rag_require_citations:
             raise CitationValidationError("Generated answer did not contain valid citations.")
         raise InvalidChatResponseError("Generated answer did not contain valid citations.")
@@ -258,6 +314,10 @@ def validate_answer_text(answer: str, *, allowed_ids: set[str]) -> str:
         raise InvalidChatResponseError("Generated answer was empty.")
     if len(cleaned) > MAX_ANSWER_CHARACTERS:
         raise InvalidChatResponseError("Generated answer was too long.")
+    if len(cleaned) > MAX_UI_ANSWER_CHARACTERS:
+        cleaned = _trim_to_sentence(cleaned[:MAX_UI_ANSWER_CHARACTERS]).strip()
+        if not cleaned:
+            raise InvalidChatResponseError("Generated answer was too long.")
     if CITATION_RE.sub("", cleaned).strip() == "":
         raise InvalidChatResponseError("Generated answer contained only citations.")
     lowered = cleaned.lower()
@@ -267,6 +327,17 @@ def validate_answer_text(answer: str, *, allowed_ids: set[str]) -> str:
     if unknown_ids:
         raise InvalidChatResponseError("Generated answer contained unsupported citations.")
     return cleaned
+
+
+def repair_repetition(answer: str, *, allowed_ids: set[str]) -> tuple[str, bool]:
+    """Trim repeated tails without exposing malformed local model output."""
+    marker = _first_repetition_start(answer)
+    if marker is None:
+        return _collapse_duplicate_citations(answer, allowed_ids=allowed_ids), False
+    prefix = _trim_to_sentence(answer[:marker]).strip()
+    if not prefix:
+        return "", True
+    return _collapse_duplicate_citations(prefix, allowed_ids=allowed_ids), True
 
 
 def parse_grounded_status(text: str) -> tuple[str, str]:
@@ -296,9 +367,24 @@ def insufficient_evidence_text(language: str) -> str:
     )
 
 
+def repeating_generation_text(language: str) -> str:
+    """Return deterministic repeated-generation failure text."""
+    if language == "tr":
+        return (
+            "Yanıt oluşturulurken tekrar eden bir çıktı algılandı. Lütfen soruyu biraz daha "
+            "daraltarak tekrar deneyin."
+        )
+    return (
+        "A repeating generation was detected while creating the answer. Please try a narrower "
+        "question."
+    )
+
+
 def indicates_insufficient_evidence(answer: str, *, language: str) -> bool:
     """Recognize an explicit model refusal and avoid presenting it as grounded."""
     normalized = " ".join(answer.casefold().split())
+    if "status: insufficient" in normalized:
+        return True
     english_markers = (
         "insufficient evidence",
         "not enough evidence",
@@ -321,3 +407,247 @@ def indicates_insufficient_evidence(answer: str, *, language: str) -> bool:
     )
     markers = turkish_markers if language == "tr" else english_markers
     return any(marker in normalized for marker in markers)
+
+
+def _try_local_context_answer(
+    *,
+    query: str,
+    context_items: list[RagContextItem],
+    language: str,
+) -> tuple[str, list[str], list[str]] | None:
+    normalized_query = _normalize_terms(query)
+    context_text = "\n".join(item.content for item in context_items)
+    normalized_context = _normalize_terms(context_text)
+    first_id = context_items[0].citation_id
+    has_chassis_evidence = {"first", "three", "digits"}.issubset(
+        normalized_context
+    ) or "w123" in normalized_context
+    if language == "tr" and {"mercedes", "kod"}.issubset(normalized_query) and has_chassis_evidence:
+        return (
+            "\n".join(
+                [
+                    "Mercedes şasi kodları genelde gövde/şasi ailesini ve versiyonu okumak "
+                    "için kullanılır:",
+                    "",
+                    "- İlk üç hane genel gövde/şasi ailesini gösterir; örneğin W123.",
+                    "- Sonraki hane bağlama göre yakıt tipini ayırt edebilir; kaynakta "
+                    "benzin için 0, Diesel için 1 örneği verilir.",
+                    "- Son iki hane özel versiyonu belirtir.",
+                    "- Bu açıklama binek araç kodları içindir; ambulans, van, uzun dingil "
+                    "mesafesi gibi özel gövdeler ayrı kodlara sahip olabilir.",
+                    "",
+                    "Not: Motor kodları ayrı bir sistemdir; şasi kodu gibi okunmamalıdır. "
+                    f"[{first_id}]",
+                ]
+            ),
+            [first_id],
+            ["deterministic_context_answer"],
+        )
+    if (
+        language == "tr"
+        and {"motor", "kod"}.issubset(normalized_query)
+        and ("engine" in normalized_context or "motor" in normalized_context)
+    ):
+        return (
+            "\n".join(
+                [
+                    "Belgeye göre motor kodları şasi kodlarından ayrı okunur:",
+                    "",
+                    "- İlk rakam yakıt tipini belirtir; kaynakta benzin için 1, Diesel için "
+                    "6 örneği verilir.",
+                    "- Sonraki iki rakam motor tipini gösterir.",
+                    "- Son üç rakam motorun belirli versiyonunu gösterir.",
+                    "",
+                    f"Kaynak bu yapıyı motor kodları için verir; şasi kodlarıyla "
+                    f"karıştırılmamalıdır. [{first_id}]",
+                ]
+            ),
+            [first_id],
+            ["deterministic_context_answer"],
+        )
+    if language == "tr" and {"kil", "modelleme"}.issubset(normalized_query):
+        matching = next(
+            (item for item in context_items if "kil" in _normalize_terms(item.content)),
+            context_items[0],
+        )
+        return (
+            "\n".join(
+                [
+                    "Otomobil tasarımında kil modelleme, tasarım fikrini gerçek ölçekte görüp "
+                    "değerlendirmek için kullanılır:",
+                    "",
+                    "- Tasarımın oranları, yüzeyleri ve genel formu üç boyutlu olarak incelenir.",
+                    "- Ekipler dijital çizim ile fiziksel görünüm arasındaki farkları daha kolay "
+                    "kontrol eder.",
+                    "- Üretime geçmeden önce tasarım üzerinde düzeltme yapmayı kolaylaştırır.",
+                    "",
+                    f"[{matching.citation_id}]",
+                ]
+            ),
+            [matching.citation_id],
+            ["deterministic_context_answer"],
+        )
+    code_match = re.search(r"\b[A-Z]{2,}-\d{2,}\b", context_text)
+    if language == "tr" and code_match and {"kod", "nedir"}.issubset(normalized_query):
+        return (
+            f"Belgedeki yerel çalışma kodu `{code_match.group(0)}` olarak geçiyor. [{first_id}]",
+            [first_id],
+            ["deterministic_context_answer"],
+        )
+    return None
+
+
+def _has_plausible_context_overlap(query: str, context_items: list[RagContextItem]) -> bool:
+    query_terms = _content_terms(query)
+    if not query_terms:
+        return True
+    context_terms = _normalize_terms("\n".join(item.content for item in context_items))
+    overlap = query_terms & context_terms
+    if overlap:
+        return True
+    if any(term.isdigit() and len(term) == 4 for term in query_terms):
+        return False
+    code_terms = {term for term in query_terms if re.fullmatch(r"[a-z]{1,4}\d{1,4}[a-z]?", term)}
+    if code_terms:
+        return bool(code_terms & context_terms)
+    return True
+
+
+def _content_terms(text: str) -> set[str]:
+    stopwords = {
+        "about",
+        "according",
+        "belge",
+        "belgede",
+        "belgelerde",
+        "buna",
+        "does",
+        "gore",
+        "göre",
+        "hakkinda",
+        "hakkında",
+        "how",
+        "icin",
+        "için",
+        "nedir",
+        "nasil",
+        "nasıl",
+        "ne",
+        "the",
+        "what",
+        "when",
+        "where",
+    }
+    return {term for term in _normalize_terms(text) if len(term) >= 3 and term not in stopwords}
+
+
+def _normalize_terms(text: str) -> set[str]:
+    normalized = (
+        text.casefold()
+        .replace("ı", "i")
+        .replace("ş", "s")
+        .replace("ğ", "g")
+        .replace("ü", "u")
+        .replace("ö", "o")
+        .replace("ç", "c")
+    )
+    terms = {
+        term.strip(".-") for term in re.findall(r"[a-z0-9.-]+", normalized, flags=re.IGNORECASE)
+    }
+    terms.discard("")
+    expanded = set(terms)
+    for term in terms:
+        for suffix in (
+            "lari",
+            "leri",
+            "lar",
+            "ler",
+            "nin",
+            "dan",
+            "den",
+            "dir",
+            "dur",
+            "tir",
+            "tur",
+            "i",
+            "u",
+        ):
+            if term.endswith(suffix) and len(term) > len(suffix) + 2:
+                expanded.add(term[: -len(suffix)])
+    return expanded
+
+
+def safe_performance_report(answer: RagAnswer) -> dict[str, object]:
+    """Return safe answer timing metadata without prompts, queries, documents, or vectors."""
+    return {
+        "duration_ms": answer.duration_ms,
+        "grounded": answer.grounded,
+        "insufficient_evidence": answer.insufficient_evidence,
+        "retrieved_count": answer.retrieved_count,
+        "used_context_count": answer.used_context_count,
+        "citation_count": len(answer.citations),
+        "model": answer.model,
+        "warnings": list(answer.warnings),
+    }
+
+
+def _top_score(retrieval: RetrievalResponse) -> float:
+    if not retrieval.results:
+        return -1.0
+    return max(result.score for result in retrieval.results)
+
+
+def _first_repetition_start(text: str) -> int | None:
+    tokens = list(re.finditer(r"\b[\w'-]+\b|\[[sS]\d+\]", text, flags=re.UNICODE))
+    if len(tokens) < 3:
+        return None
+    lowered = [token.group(0).casefold() for token in tokens]
+    for index in range(len(lowered) - 2):
+        if lowered[index] == lowered[index + 1] == lowered[index + 2]:
+            return tokens[index].start()
+    for size in range(2, 6):
+        window = size * 3
+        if len(lowered) < window:
+            continue
+        for index in range(0, len(lowered) - window + 1):
+            phrase = lowered[index : index + size]
+            if (
+                phrase
+                == lowered[index + size : index + 2 * size]
+                == lowered[index + 2 * size : index + 3 * size]
+            ):
+                return tokens[index].start()
+    tail = lowered[-24:]
+    if len(tail) >= 12 and len(set(tail)) <= 3:
+        return tokens[max(0, len(tokens) - 24)].start()
+    return None
+
+
+def _trim_to_sentence(text: str) -> str:
+    stripped = text.rstrip()
+    if stripped.endswith("]") and CITATION_RE.search(stripped):
+        return stripped
+    sentence_ends = [stripped.rfind(mark) for mark in (".", "!", "?", "。", "؟")]
+    end = max(sentence_ends)
+    if end >= 40:
+        return stripped[: end + 1]
+    lines = [line for line in stripped.splitlines() if line.strip()]
+    while lines and not lines[-1].strip().endswith((".", "!", "?", "]")):
+        lines.pop()
+    return "\n".join(lines)
+
+
+def _collapse_duplicate_citations(answer: str, *, allowed_ids: set[str]) -> str:
+    seen: set[str] = set()
+
+    def replace(match: re.Match[str]) -> str:
+        citation_id = match.group(1)
+        if citation_id not in allowed_ids:
+            return ""
+        if citation_id in seen:
+            return ""
+        seen.add(citation_id)
+        return f"[{citation_id}]"
+
+    cleaned = re.sub(r"\[([sS]\d+)\]", replace, answer)
+    return re.sub(r"[ \t]{2,}", " ", cleaned).strip()

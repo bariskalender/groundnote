@@ -14,8 +14,9 @@ The system prompt contains stable GroundNote behavior:
 - cite only provided source IDs;
 - state when evidence is insufficient.
 
-The user prompt contains the normalized question, requested language, allowed citation IDs, citation
-rules, and explicitly delimited retrieved context.
+The `grounded-rag-v2` user prompt contains the normalized question, requested language, allowed
+citation IDs, citation rules, concise answer requirements, repetition-avoidance guidance, and
+explicitly delimited retrieved context.
 
 ## Delimiters
 
@@ -40,8 +41,15 @@ RAG logs safe metadata only: query length, language, result counts, context coun
 model name, prompt version, duration, and groundedness flags. It does not log full queries, prompts,
 retrieved chunks, generated answers, vectors, or file paths.
 
+## Output Guardrails
+
+Phase 7.2 checks generated output for repeated words, repeated phrases, repeated citation markers,
+low-diversity tails, and excessive length before rendering. GroundNote trims a useful cited prefix
+when possible, retries once when the output is unusable, and otherwise returns a localized safe
+error.
+
 ## Limitations
 
 Prompt defenses reduce risk but do not prove perfect hallucination prevention or perfect
-instruction-following. Phase 6 validates citations pragmatically and keeps final responsibility with
-the source documents.
+instruction-following. GroundNote validates citations pragmatically and keeps final responsibility
+with the source documents.

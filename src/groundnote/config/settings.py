@@ -103,13 +103,13 @@ class Settings(BaseSettings):
     maximum_output_tokens: int = 512
     temperature: float = 0.2
 
-    rag_retrieval_top_k: int = 5
-    rag_minimum_score: float = 0.20
-    rag_max_context_characters: int = 6000
-    rag_max_chunk_count: int = 5
+    rag_retrieval_top_k: int = 3
+    rag_minimum_score: float = 0.24
+    rag_max_context_characters: int = 2600
+    rag_max_chunk_count: int = 3
     rag_temperature: float = 0.1
-    rag_max_output_tokens: int = 512
-    rag_prompt_version: str = "grounded-rag-v1"
+    rag_max_output_tokens: int = 224
+    rag_prompt_version: str = "grounded-rag-v2"
     rag_require_citations: bool = True
     rag_insufficient_evidence_mode: str = "explicit"
     rag_max_query_characters: int = 4000

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import pytest
+
 from groundnote.ai.fakes import FakeChatProvider
 from groundnote.config import Settings
 from groundnote.domain import SupportedFileType
 from groundnote.rag import RagRequest, RagService
-from groundnote.rag.router import QueryIntent, route_query
+from groundnote.rag.router import QueryIntent, deterministic_response, route_query
 from groundnote.retrieval.models import RetrievalResponse, RetrievalResult, SemanticQuery
 
 
@@ -32,6 +34,28 @@ def test_router_classifies_simple_turkish_greeting_without_rag() -> None:
     assert routed.language == "tr"
 
 
+@pytest.mark.parametrize("text", ["A", "?", "asd", "asdf", "aaaa", "."])
+def test_router_rejects_short_unclear_inputs(text: str) -> None:
+    routed = route_query(text, response_language="tr")
+
+    assert routed.intent is QueryIntent.UNCLEAR
+    assert "daha açık" in deterministic_response(routed.intent, language=routed.language)
+
+
+@pytest.mark.parametrize("text", ["W123", "NVH", "CRC nedir?", "OM617", "VIN"])
+def test_router_allows_short_domain_terms(text: str) -> None:
+    routed = route_query(text, response_language="tr")
+
+    assert routed.intent is QueryIntent.DOCUMENT_QUESTION
+
+
+def test_router_handles_empty_input() -> None:
+    routed = route_query("   ", response_language="en")
+
+    assert routed.intent is QueryIntent.EMPTY
+    assert deterministic_response(routed.intent, language="en") == "Please enter a question."
+
+
 def test_exact_bad_phase_4_refusal_is_not_grounded() -> None:
     chat = FakeChatProvider(
         responses=[
@@ -47,7 +71,7 @@ def test_exact_bad_phase_4_refusal_is_not_grounded() -> None:
     assert answer.grounded is False
     assert answer.insufficient_evidence is True
     assert answer.citations == []
-    assert chat.calls == 1
+    assert chat.calls == 0
 
 
 def _result() -> RetrievalResult:

@@ -12,11 +12,12 @@ from groundnote.rag.errors import (
     PromptConstructionError,
     RagError,
     RagRetrievalError,
+    RepeatingGenerationError,
     UnsupportedResponseLanguageError,
 )
 from groundnote.rag.models import Citation, RagAnswer, RagContextItem, RagRequest, RagResponse
 from groundnote.rag.router import QueryIntent, RoutedQuery, deterministic_response, route_query
-from groundnote.rag.service import RagService
+from groundnote.rag.service import RagService, safe_performance_report
 
 __all__ = [
     "ChatGenerationError",
@@ -37,8 +38,10 @@ __all__ = [
     "RagResponse",
     "RagRetrievalError",
     "RagService",
+    "RepeatingGenerationError",
     "RoutedQuery",
     "UnsupportedResponseLanguageError",
     "deterministic_response",
     "route_query",
+    "safe_performance_report",
 ]

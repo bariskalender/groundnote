@@ -317,3 +317,22 @@ reruns and settings changes from repeating work. Files run synchronously and seq
 background worker, uploaded bytes are not retained in session state, duplicate detection happens
 before model loading, and one file failure does not stop later files. Retry remains an inline action
 on the affected failed document; deletion and full Knowledge Base management stay in Phase 8.
+
+## ADR-0032: Prefer Deterministic Local Guardrails Before Model Work
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Phase 7.2 adds deterministic routing for empty, unclear, greeting, thanks, help, and no-ready
+document states before retrieval or model calls. This keeps invalid inputs fast, prevents tracebacks
+from short nonsense text, and avoids loading local models when no document answer is possible.
+
+The RAG prompt is tightened to `grounded-rag-v2`, and generated answers are checked for repeated
+words, repeated phrases, repeated citation markers, low-diversity tails, and excessive length.
+GroundNote trims safe cited prefixes, retries once only when needed, and otherwise returns a
+localized safe repetition error. Citation cleanup is local when possible and does not trigger an
+extra full model generation.
+
+The default RAG context and output budgets are reduced for local latency. The embedding service now
+tracks provider loaded state, letting warm sessions reuse the embedding model for sequential upload
+and retrieval bursts while Memory saver continues to unload models after each operation.

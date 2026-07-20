@@ -30,17 +30,25 @@ class EmbeddingService:
     def __init__(self, *, settings: Settings, provider: BatchEmbeddingProvider) -> None:
         self.settings = settings
         self.provider = provider
+        self._loaded = False
 
     def load(self) -> None:
         """Load the embedding provider."""
+        if self._loaded:
+            return
         try:
             self.provider.load()
+            self._loaded = True
         except Exception as exc:
+            self._loaded = False
             raise EmbeddingModelLoadError("Embedding model could not be loaded.") from exc
 
     def unload(self) -> None:
         """Release embedding provider resources where supported."""
-        self.provider.unload()
+        try:
+            self.provider.unload()
+        finally:
+            self._loaded = False
 
     def embed_texts(self, texts: Sequence[str]) -> EmbeddingBatchResult:
         """Embed a non-empty batch while preserving input order."""

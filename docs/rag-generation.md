@@ -7,13 +7,15 @@ session-only UI history rather than persistent chat storage.
 
 1. Validate and normalize the user question.
 2. Resolve the response language as Turkish or English.
-3. Route greetings, thanks, and app-help messages before RAG.
+3. Route empty, unclear, greeting, thanks, and app-help messages before RAG.
 4. Run hybrid retrieval once for document questions.
 5. Select bounded retrieved chunks as untrusted context.
-6. Build separated system and user prompts with prompt version `grounded-rag-v1`.
+6. Build separated system and user prompts with prompt version `grounded-rag-v2`.
 7. Generate with Microsoft Foundry Local chat.
-8. Parse the supported/insufficient status and validate citation IDs.
-9. Return a grounded answer or a deterministic insufficient-evidence response.
+8. Parse the supported/insufficient status, validate citation IDs, and repair repetition when
+   possible.
+9. Return a grounded answer, a deterministic insufficient-evidence response, or a localized safe
+   repetition error.
 
 ## Model Selection
 
@@ -30,11 +32,11 @@ GroundNote stops before exceeding the configured context character limit instead
 
 Defaults:
 
-- retrieval top-k: `5`
-- minimum score: `0.20`
-- maximum context characters: `6000`
-- maximum context chunks: `5`
-- maximum output tokens: `512`
+- retrieval top-k: `3`
+- minimum score: `0.24`
+- maximum context characters: `2600`
+- maximum context chunks: `3`
+- maximum output tokens: `224`
 - temperature: `0.1`
 
 ## Groundedness And Insufficient Evidence
@@ -51,8 +53,22 @@ sources do not contain enough evidence, GroundNote also converts that output to 
 insufficient-evidence result. Any citation appended to that refusal is removed so it cannot be
 presented as a grounded-success answer.
 
-Greetings, thanks, and app-help messages are deterministic and do not load embedding or chat
-models.
+Greetings, thanks, app-help messages, empty inputs, and unclear short inputs are deterministic and
+do not load embedding or chat models. Short technical terms such as `W123`, `NVH`, `CRC`, `VIN`,
+`HTTP`, and `API` are allowed through retrieval.
+
+If retrieval returns no result above the conservative threshold, GroundNote returns insufficient
+evidence directly and skips the chat model.
+
+## Repetition Protection And Citations
+
+Generated output is checked for repeated words, repeated short phrases, repeated citation markers,
+low-diversity tails, and excessive length. GroundNote trims to the last safe complete sentence when
+the useful prefix remains cited. If the output is unusable, one stricter regeneration is attempted.
+
+Citations are compact. The model is asked to cite a paragraph or bullet group once when the same
+source supports it, and the UI suppresses duplicate source labels. Technical retrieval details are
+not shown in the normal chat flow.
 
 ## Scope And Limitations
 

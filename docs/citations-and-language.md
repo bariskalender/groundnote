@@ -13,6 +13,10 @@ If citations are required and the first generated answer contains no valid citat
 performs at most one citation-repair generation. If that also fails, the service returns a safe
 citation validation error instead of inventing sources.
 
+Phase 7.2 prefers local citation cleanup when an answer is otherwise grounded. Duplicate citation
+tokens are collapsed without a second model call where possible, and repeated citation-marker loops
+are handled by the repetition guard.
+
 A valid citation token does not override an explicit model statement that the sources lack enough
 evidence. Such responses become deterministic insufficient-evidence results with no displayed
 citations.
@@ -27,6 +31,9 @@ citations.
 
 Filenames are reduced to safe display names. Stored UUID filenames and absolute paths are not shown.
 PDF page numbers remain 1-based.
+
+Normal chat output renders compact source labels and suppresses duplicate source rows. Technical
+retrieval details are not shown in the normal answer flow.
 
 ## Language Handling
 

@@ -40,6 +40,10 @@ including deletion and re-index controls, remains future work.
 - Multiple-file upload, English/Turkish UI text, New chat, and performance modes.
 - Automatic sequential processing after file selection with compact per-document status and retry.
 - Gear-based settings and Streamlit-safe Windows logging without browser tracebacks.
+- Phase 7.2 router hardening for empty, unclear, greeting, thanks, and help inputs before model
+  calls.
+- Repetition protection, compact citations, lower RAG context budget, warm embedding reuse, and
+  safer image-only PDF handling.
 - Safe duplicate and insufficient-evidence presentation.
 - Unit tests.
 - Ruff and mypy checks.
@@ -105,6 +109,7 @@ uv run pytest -m "not foundry"
 - Phase 7 completed locally.
 - Phase 7.1 stabilization completed locally.
 - Phase 7.1.1 automatic-upload and Windows reliability patch completed locally.
+- Phase 7.2 performance, answer quality, router, and indexing optimization completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
@@ -113,6 +118,8 @@ uv run pytest -m "not foundry"
 - The Streamlit interface automatically processes selected files sequentially, shows compact safe
   document states, supports per-document retry, and provides session-only chat, trusted citations,
   compact source display, and insufficient-evidence results.
+- Invalid short inputs do not call retrieval or local models. Low-confidence retrieval returns
+  insufficient evidence without chat generation.
 - Persistent database-backed conversation memory is intentionally not implemented.
 - Document deletion, re-indexing controls, and full Knowledge Base management are not implemented.
 
@@ -120,7 +127,8 @@ See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking
 `docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
 `docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`,
 `docs/citations-and-language.md`, `docs/streamlit-interface.md`, `docs/demo-workflow.md`, and
-`docs/phase-7-1-stabilization.md` for the current behavior and limitations.
+`docs/phase-7-1-stabilization.md`, `docs/phase-7-2-optimization.md` for the current behavior and
+limitations.
 
 ## Privacy
 

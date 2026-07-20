@@ -33,6 +33,10 @@ partial batch is supported. Empty inputs are rejected. No concurrent model calls
 In Balanced and Fast UI modes, the embedding model may remain warm after first use for the current
 Streamlit session. Memory saver mode unloads it after each operation.
 
+Phase 7.2 also tracks the embedding provider's loaded state inside `EmbeddingService`, so
+sequential uploads in the same warm session do not repeatedly call provider load. Duplicate uploads
+are detected before parsing, chunking, or embedding model work.
+
 ## Serialization And SQLite Storage
 
 Embeddings are serialized as compact `float32` bytes by the existing storage codec. Pickle and JSON

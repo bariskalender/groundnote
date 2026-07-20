@@ -12,11 +12,13 @@ def render_citations(citations: list[Citation]) -> None:
     """Render citations in trusted first-use order."""
     if not citations:
         return
-    with st.expander(f"Sources ({len(citations)})", expanded=True):
-        for citation in citations:
-            view = citation_to_view(citation)
-            st.markdown(f"**[{view.citation_id}]** {view.label}")
-            with st.expander(f"Technical details for {view.citation_id}", expanded=False):
-                st.write(f"File type: {view.file_type}")
-                if view.score is not None:
-                    st.write(f"Retrieval score: {view.score:.3f}")
+    labels = []
+    seen: set[tuple[str, int | None, str | None]] = set()
+    for citation in citations:
+        view = citation_to_view(citation)
+        key = (view.label, view.page_number, view.section_title)
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(f"[{view.citation_id}] {view.label}")
+    st.caption("Sources: " + " · ".join(labels))

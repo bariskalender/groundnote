@@ -13,6 +13,7 @@
 | 7 | Streamlit Upload, Indexing, and Chat Interface | Complete |
 | 7.1 | Product Stabilization, Retrieval Reliability, Performance, and Chat UX Rebuild | Complete |
 | 7.1.1 | Automatic Document Processing, Simplified UI, and Windows Error Recovery | Complete |
+| 7.2 | Performance, Answer Quality, Router Robustness, and Indexing Optimization | Complete |
 | 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Not started |
 
 ## Phase 0 Acceptance Notes
@@ -161,3 +162,22 @@
 - Moved session settings and model unloading behind the upper-right gear popover.
 - Verified multiple uploads, corrupt-file recovery, duplicates, grounded chat, settings reruns, New
   chat document preservation, and model cleanup on Windows without starting Phase 8.
+
+## Phase 7.2 Acceptance Notes
+
+- Added deterministic handling for empty, unclear, greeting, thanks, and help inputs before
+  retrieval or local model calls.
+- Allowed short automotive and technical terms such as `W123`, `NVH`, `CRC`, `VIN`, and `API` to
+  continue through document retrieval.
+- Added no-ready-document and processing-document responses without loading models.
+- Tightened the RAG prompt to `grounded-rag-v2` with compact citations, natural Turkish guidance,
+  repetition avoidance, and clearer chassis/body-code versus engine-code separation.
+- Added repeated-word, repeated-phrase, repeated-citation, and low-diversity-tail output repair with
+  one stricter regeneration attempt.
+- Reduced default RAG context and output budgets and skipped chat generation for low-confidence
+  retrieval.
+- Kept embedding providers warm inside a session unless Memory saver or manual unload releases
+  them.
+- Removed normal-flow technical citation details and kept compact trusted source labels.
+- Improved image-only PDF/OCR-safe messaging without adding OCR or hallucinated summaries.
+- Added `docs/phase-7-2-optimization.md`.

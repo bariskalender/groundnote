@@ -499,15 +499,15 @@ def _answer_prompt(context: ApplicationContext, prompt: str, language: str) -> N
 def _render_compact_citations(message: ChatMessageState, language: str) -> None:
     if not message.citations:
         return
-    st.caption(
-        f"{t('sources', language)}: "
-        + " · ".join(
-            f"[{citation.citation_id}] {citation.display_label}" for citation in message.citations
-        )
-    )
-    with st.expander(t("technical_details", language), expanded=False):
-        for citation in message.citations:
-            st.caption(f"{citation.citation_id}: {citation.source_file_type.value}")
+    labels: list[str] = []
+    seen: set[tuple[str, int | None, str | None]] = set()
+    for citation in message.citations:
+        key = (citation.display_label, citation.page_number, citation.section_title)
+        if key in seen:
+            continue
+        seen.add(key)
+        labels.append(f"[{citation.citation_id}] {citation.display_label}")
+    st.caption(f"{t('sources', language)}: " + " · ".join(labels))
 
 
 def _message_from_outcome(outcome: QuestionOutcome) -> ChatMessageState:

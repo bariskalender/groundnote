@@ -21,7 +21,7 @@ from groundnote.rag import (
 )
 from groundnote.services import DocumentIndexingService, PreEmbeddingIngestionService
 from groundnote.storage import SQLiteUnitOfWorkFactory
-from groundnote.ui.errors import InvalidFilterError, NoFileSelectedError, NoIndexedDocumentsError
+from groundnote.ui.errors import InvalidFilterError, NoFileSelectedError
 from groundnote.ui.models import (
     DocumentSummary,
     QuestionOutcome,
@@ -31,6 +31,11 @@ from groundnote.ui.models import (
 )
 
 StageCallback = Callable[[UploadStage], None]
+PROCESSING_DOCUMENT_STATUSES = {
+    DocumentStatus.PENDING,
+    DocumentStatus.PENDING_EMBEDDING,
+    DocumentStatus.INDEXING,
+}
 
 
 class DocumentWorkflow:
@@ -183,18 +188,11 @@ class QuestionWorkflow:
         started = time.perf_counter()
         routed = route_query(question, response_language=response_language)
         if routed.intent is not QueryIntent.DOCUMENT_QUESTION:
-            answer = RagAnswer(
-                answer=deterministic_response(routed.intent, language=routed.language),
-                citations=[],
-                grounded=False,
-                insufficient_evidence=False,
-                response_language=cast(Literal["tr", "en"], routed.language),
-                model="deterministic-router",
-                prompt_version="intent-router-v1",
-                retrieved_count=0,
-                used_context_count=0,
-                warnings=[f"intent_{routed.intent.value}"],
-                duration_ms=_elapsed_ms(started),
+            answer = _deterministic_answer(
+                deterministic_response(routed.intent, language=routed.language),
+                language=routed.language,
+                started=started,
+                warning=f"intent_{routed.intent.value}",
             )
             return QuestionOutcome(
                 question=question.strip(),
@@ -202,9 +200,26 @@ class QuestionWorkflow:
                 document_ids=(),
                 file_types=(),
             )
-        indexed = self.document_workflow.indexed_documents()
+        documents = self.document_workflow.list_documents()
+        indexed = [document for document in documents if document.status == DocumentStatus.INDEXED]
         if not indexed:
-            raise NoIndexedDocumentsError("No indexed documents are available.")
+            language = routed.language
+            processing = any(
+                document.status in PROCESSING_DOCUMENT_STATUSES for document in documents
+            )
+            text = _no_ready_document_text(language, processing=processing)
+            return QuestionOutcome(
+                question=question.strip(),
+                answer=_deterministic_answer(
+                    text,
+                    language=language,
+                    started=started,
+                    warning="no_ready_documents",
+                    insufficient=True,
+                ),
+                document_ids=(),
+                file_types=(),
+            )
         request = build_rag_request(
             question,
             indexed_documents=indexed,
@@ -289,3 +304,36 @@ def _remove_file(path: Path) -> None:
 
 def _elapsed_ms(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 3)
+
+
+def _deterministic_answer(
+    text: str,
+    *,
+    language: str,
+    started: float,
+    warning: str,
+    insufficient: bool = False,
+) -> RagAnswer:
+    return RagAnswer(
+        answer=text,
+        citations=[],
+        grounded=False,
+        insufficient_evidence=insufficient,
+        response_language=cast(Literal["tr", "en"], language),
+        model="deterministic-router",
+        prompt_version="intent-router-v2",
+        retrieved_count=0,
+        used_context_count=0,
+        warnings=[warning],
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _no_ready_document_text(language: str, *, processing: bool) -> str:
+    if language == "tr":
+        if processing:
+            return "Belgeler hazırlanıyor. İlk belge hazır olduğunda soru sorabilirsiniz."
+        return "Önce bir belge yükleyin; sonra onun hakkında soru sorabilirsiniz."
+    if processing:
+        return "Documents are being prepared. You can ask once at least one document is ready."
+    return "Please upload a document first, then ask a question about it."

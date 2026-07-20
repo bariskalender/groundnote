@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 7.1.1 complete locally. Phase 8 has not started.
+Phase 7.2 complete locally. Phase 8 has not started.
 
 ## Completed Tasks
 
@@ -180,6 +180,25 @@ Phase 7.1.1 complete locally. Phase 8 has not started.
 - Updated the Streamlit, indexing, demonstration, stabilization, README, roadmap, state, and
   decision documentation.
 
+### Phase 7.2
+
+- Added deterministic router handling for empty, unclear, greeting, thanks, help, no-document, and
+  processing-document states before retrieval or model calls.
+- Kept short automotive and technical terms such as `W123`, `NVH`, `CRC`, `VIN`, and `API`
+  eligible for retrieval.
+- Tightened the grounded RAG prompt to `grounded-rag-v2` with compact citations, natural Turkish
+  guidance, repetition avoidance, and chassis/body-code versus engine-code separation.
+- Added repeated-word, repeated-phrase, repeated-citation, low-diversity-tail, and excessive-length
+  answer protection with local trimming and one stricter regeneration attempt.
+- Added deterministic low-confidence retrieval shortcut that skips chat generation and returns
+  insufficient evidence.
+- Reduced default local RAG context/output budgets for latency.
+- Added loaded-state tracking in `EmbeddingService` so warm sessions do not repeatedly load the
+  embedding provider for sequential uploads and retrieval bursts.
+- Removed normal-flow technical citation details and kept compact trusted source labels.
+- Improved image-only PDF/OCR limitation messaging without adding OCR.
+- Added `docs/phase-7-2-optimization.md`.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -352,6 +371,26 @@ Phase 7.1.1 complete locally. Phase 8 has not started.
 - `foundry status`
 - Security, privacy, generated-file, and tracked-file searches with `rg` and Git.
 
+## Commands Run In Phase 7.2
+
+- Initial Git branch, cleanliness, remote, synchronization, history, and Phase 8 safety checks.
+- Security and tracked-file checks with `rg` and Git.
+- Targeted router, RAG repetition, citation cleanup, UI workflow, and safe error tests.
+- `uv run ruff check src tests`
+- `uv run ruff format src\groundnote\rag\service.py`
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase72-full-final5`
+- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase72-cov-final`
+- `uv run python scripts/check_foundry.py`
+- `uv run python scripts/smoke_ui_pipeline.py`
+- `uv run python scripts/smoke_ui_real.py`
+- Headless Streamlit startup smoke on port 8512.
+- Manual Windows real-document timing smoke with MB nomenclature PDF, Turkish design PDF, generated
+  image-only PDF, and a small TXT fixture.
+
 ## Test Status
 
 - Phase 7 UI unit/integration/Streamlit target: Passed.
@@ -386,6 +425,19 @@ Phase 7.1.1 complete locally. Phase 8 has not started.
   later-file success after a corrupt PDF, inline retry recovery, duplicate skipping, gear settings,
   rerun protection, grounded follow-up chat with citation, New chat document preservation, no raw
   traceback, no logging `OSError`, and zero loaded models afterward.
+- Phase 7.2 targeted router/RAG/UI checks: Passed, 74 tests passed.
+- Phase 7.2 `uv run pytest -m "not foundry"`: Passed, 228 tests passed.
+- Phase 7.2 coverage: Passed, 228 tests passed, 79% total coverage.
+- Phase 7.2 Foundry check: Passed; Foundry server `Ready`, 4 cached candidate models, local service
+  reachable.
+- Phase 7.2 fake-provider UI pipeline: Passed.
+- Phase 7.2 real Foundry UI smoke: Passed with local embeddings, English/Turkish grounded answers,
+  insufficient evidence, and trusted citations.
+- Phase 7.2 Streamlit startup smoke: Passed on port 8512 with HTTP 200, then the test instance was
+  stopped.
+- Phase 7.2 manual real-document smoke: Passed for invalid input, greeting, Mercedes chassis,
+  Mercedes engine, Turkish design, image-only PDF rejection, unrelated World Cup insufficient
+  evidence, and small TXT fact answer.
 - Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
 - Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
 - `uv sync`: Passed.
@@ -443,8 +495,15 @@ Phase 7.1.1 complete locally. Phase 8 has not started.
   fallback, but the final successful smoke used the preferred `phi-3.5-mini` model.
 - Phase 7.1 model operations remain synchronous. Balanced mode keeps models warm during the session,
   Fast uses the low-resource chat model, and Memory saver unloads after each operation.
-- Phase 7.1.1 automatic processing is synchronous and sequential; it is not a background queue.
+- Phase 7.2 automatic processing remains synchronous and sequential; it is not a background queue.
   Document deletion and full Knowledge Base management remain Phase 8 work.
+- Phase 7.2 materially improves the observed 81.726 s unrelated-question path to 0.546 s by
+  returning insufficient evidence before chat generation.
+- Phase 7.2 deterministic context answers are intentionally narrow and evidence-gated. General
+  document questions still use the local chat model and may remain slower than deterministic paths.
+- Manual Phase 7.2 indexing remained slow for medium PDFs on CPU: MB PDF 98.081 s and Turkish
+  design PDF 107.257 s. Duplicate detection and warm embedding reuse are improved, but full
+  background indexing and broader indexing controls remain future work.
 - A parse failure that occurs before persistence can be retried while the browser still supplies the
   selected upload; after the file is unavailable, the user must select it again.
 - Real Foundry Phase 7.1 smoke timings were measured on a tiny safe fixture:

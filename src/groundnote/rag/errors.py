@@ -43,6 +43,10 @@ class InvalidChatResponseError(RagError):
     """Raised when generated chat output is unsafe or malformed."""
 
 
+class RepeatingGenerationError(InvalidChatResponseError):
+    """Raised when generated chat output enters a repetition loop."""
+
+
 class CitationValidationError(RagError):
     """Raised when generated citations cannot be validated."""
 
