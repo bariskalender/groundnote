@@ -180,7 +180,7 @@ def test_model_unload_failure_does_not_corrupt_index_or_grounded_answer(tmp_path
     embedding = UnloadFailEmbeddingProvider(dimension=4)
     chat = UnloadFailChatProvider(responses=["The note remains searchable. [S1]"])
     context = build_application_context(
-        _settings(tmp_path),
+        _settings(tmp_path).model_copy(update={"keep_models_loaded": False}),
         embedding_provider=embedding,
         chat_provider=chat,
     )

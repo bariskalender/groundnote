@@ -52,7 +52,8 @@ class DocumentIndexingService:
             self._mark_failed(document_id, "Embedding generation failed during indexing.")
             raise exc
         finally:
-            self._unload_embedding_model()
+            if not self.settings.keep_models_loaded:
+                self._unload_embedding_model()
 
         embedded_at = datetime.now(UTC)
         with self.unit_of_work_factory() as unit_of_work:

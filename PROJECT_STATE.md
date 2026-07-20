@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 7 complete. Phase 8 has not started.
+Phase 7.1 complete locally. Phase 8 has not started.
 
 ## Completed Tasks
 
@@ -143,6 +143,22 @@ Phase 7 complete. Phase 8 has not started.
   coverage.
 - Added Streamlit interface and demonstration workflow documentation.
 
+### Phase 7.1
+
+- Fixed retrieval starvation by removing the pre-scoring SQL candidate limit.
+- Added SQLite FTS5 lexical search, hybrid ranking, heading/numbered-term boosts, conservative
+  typo-tolerant expansion, and adjacent-context support.
+- Added deterministic greeting, thanks, and app-help routing that bypasses retrieval and model
+  loading.
+- Added a supported/insufficient RAG response contract and stronger citation-free insufficient
+  evidence handling.
+- Changed the interactive default to warm local models after first use, with Fast and Memory saver
+  performance modes and manual model unload.
+- Rebuilt Streamlit into a chat-first interface with sidebar upload, source filters, Turkish and
+  English UI text, multiple-file upload, New chat, session-only history, compact citations, and
+  recoverable operation state.
+- Added `docs/phase-7-1-stabilization.md`.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -270,6 +286,32 @@ Phase 7 complete. Phase 8 has not started.
   insufficient evidence, duplicate handling, rerun behavior, and safe console output.
 - Security and privacy source/tracked-file searches with `rg` and Git.
 
+## Commands Run In Phase 7.1
+
+- Initial Git status, branch, remote, fetch, synchronization, history, and tracked-file checks.
+- `uv run ruff check src tests`
+- `uv run mypy src`
+- Targeted retrieval, RAG, UI state, migration, UI workflow, and AppTest checks.
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase71-full1`
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format src\groundnote\app.py src\groundnote\retrieval\service.py`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase71-full-final`
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase71-full-postfix`
+- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase71-cov-final`
+- `uv run python scripts/check_foundry.py`
+- `foundry status`
+- `uv run python scripts/smoke_ui_pipeline.py`
+- `uv run python scripts/smoke_ui_real.py`
+- `uv run streamlit run src/groundnote/app.py --server.headless=true --server.port=8509`
+- Manual in-app browser smoke for chat-first layout, sidebar controls, multiple-file uploader,
+  bottom chat input, and greeting submission.
+- `foundry model unload Phi-3.5-mini-instruct-generic-cpu:2`
+- `foundry model unload qwen3-embedding-0.6b-generic-cpu:1`
+- Deterministic greeting workflow timing smoke.
+
 ## Test Status
 
 - Phase 7 UI unit/integration/Streamlit target: Passed.
@@ -284,6 +326,15 @@ Phase 7 complete. Phase 8 has not started.
   duplicate handling, rerun behavior, and no raw browser error.
 - Phase 7 `uv run pytest -m "not foundry"`: Passed, 185 tests passed.
 - Phase 7 coverage: Passed, 84% total coverage.
+- Phase 7.1 targeted retrieval/RAG/UI checks: Passed.
+- Phase 7.1 `uv run pytest -m "not foundry"`: Passed, 191 tests passed.
+- Phase 7.1 coverage: Passed, 191 tests passed, 80% total coverage.
+- Phase 7.1 fake-provider UI pipeline: Passed.
+- Phase 7.1 real Foundry UI-backend smoke: Passed with local embeddings and chat.
+- Phase 7.1 manual Streamlit browser smoke: Passed for chat-first layout, sidebar upload, language,
+  performance mode, multiple-file input, bottom chat input, and greeting response.
+- Phase 7.1 deterministic greeting timing smoke: Passed in 0.07 ms with zero model calls and zero
+  citations.
 - Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
 - Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
 - `uv sync`: Passed.
@@ -339,9 +390,16 @@ Phase 7 complete. Phase 8 has not started.
 - `phi-3.5-mini` was downloaded for the Phase 6 real chat smoke because it was not cached at the
   start of real chat testing. `qwen2.5-0.5b` was also downloaded and tested as a low-resource
   fallback, but the final successful smoke used the preferred `phi-3.5-mini` model.
-- Phase 7 model operations are synchronous. The UI remains intentionally simple and does not add a
-  background job queue; local model inference can take several seconds.
-- Phase 7 does not include document deletion, re-index controls, or full Knowledge Base management.
+- Phase 7.1 model operations remain synchronous. Balanced mode keeps models warm during the session,
+  Fast uses the low-resource chat model, and Memory saver unloads after each operation.
+- Phase 7.1 adds a minimal retry-indexing action, but document deletion and full Knowledge Base
+  management remain Phase 8 work.
+- Real Foundry Phase 7.1 smoke timings were measured on a tiny safe fixture:
+  - indexing: 5.316 s
+  - English grounded answer: 20.919 s
+  - Turkish grounded answer: 12.946 s
+  - insufficient-evidence answer: 12.969 s
+  These are materially below the reported 73.93 s case but still synchronous local inference.
 
 ## Pre-Phase 6 Audit Notes
 

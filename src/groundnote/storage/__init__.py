@@ -12,6 +12,7 @@ from groundnote.storage.exceptions import (
 from groundnote.storage.migrations import MigrationRunner
 from groundnote.storage.repositories import (
     DocumentRepository,
+    LexicalChunkMatch,
     SearchableChunkEmbedding,
     SerializedEmbedding,
     SQLiteDocumentRepository,
@@ -25,6 +26,7 @@ __all__ = [
     "DocumentRepository",
     "DuplicateDocumentError",
     "InvalidEmbeddingError",
+    "LexicalChunkMatch",
     "MigrationError",
     "MigrationRunner",
     "SQLiteConnectionFactory",

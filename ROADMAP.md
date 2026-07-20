@@ -11,6 +11,7 @@
 | 6 | Foundry Local chat provider and RAG answer generation | Complete |
 | Audit | Pre-Phase 7 UI readiness audit | Complete |
 | 7 | Streamlit Upload, Indexing, and Chat Interface | Complete |
+| 7.1 | Product Stabilization, Retrieval Reliability, Performance, and Chat UX Rebuild | Complete |
 | 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Not started |
 
 ## Phase 0 Acceptance Notes
@@ -127,3 +128,21 @@
 - Added `docs/streamlit-interface.md` and `docs/demo-workflow.md`.
 - No deletion UI, re-index UI, full Knowledge Base management, OCR, cloud inference, or Phase 8
   work was implemented.
+
+## Phase 7.1 Acceptance Notes
+
+- Removed pre-scoring SQL candidate starvation so long documents and later documents remain
+  searchable before final ranking limits are applied.
+- Added SQLite FTS5 lexical search with hybrid ranking, heading and numbered-term boosts,
+  conservative typo expansion, and adjacent-context support.
+- Added deterministic routing for greetings, thanks, and app help so simple messages bypass
+  retrieval and local model loading.
+- Added a stronger supported/insufficient generation contract with citation-free insufficient
+  evidence.
+- Changed the default model lifecycle to keep models warm during an interactive session while
+  preserving Memory saver and manual unload behavior.
+- Rebuilt Streamlit around a chat-first main view with sidebar upload, source filters, performance
+  mode, Turkish/English UI text, session-only chat history, New chat, compact citations, and
+  recoverable operation state.
+- Added multiple-file upload and minimal retry indexing without implementing Phase 8 Knowledge Base
+  management.

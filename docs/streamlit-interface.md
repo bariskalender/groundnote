@@ -1,7 +1,8 @@
 # Streamlit Interface
 
-Phase 7 provides GroundNote's first complete local user interface. It connects the existing secure
-document, indexing, retrieval, and grounded RAG services without duplicating their business logic.
+Phase 7.1 provides GroundNote's chat-first local user interface. It connects secure document
+upload, indexing, hybrid retrieval, and grounded RAG services without duplicating their business
+logic.
 
 ## Start The Interface
 
@@ -25,23 +26,25 @@ lightweight `foundry server status` check and never starts the service or downlo
 
 The sidebar contains:
 
-- local privacy guidance;
+- New chat;
+- interface language: English or Turkish;
+- performance mode: Balanced, Fast, or Memory saver;
 - Foundry Local status (`Ready`, `Not running`, `Unavailable`, or `Unknown`);
-- navigation between **Documents** and **Ask GroundNote**;
-- supported-format and OCR notices;
-- the configured embedding and chat model aliases.
+- multiple-file upload;
+- indexed-source summary;
+- source filters;
+- compact settings and model unload.
 
-The main heading describes GroundNote as a private, offline RAG study assistant. The persistent
-footer notice reminds users that local models can make mistakes and important information should be
-checked against cited sources.
+The main area is the conversation. It shows assistant/user messages, compact citations, optional
+technical details, and a bottom chat input.
 
 ## Documents View
 
-The upload control accepts one `.pdf`, `.docx`, `.txt`, `.md`, or `.markdown` file. Streamlit and
+The upload control accepts multiple `.pdf`, `.docx`, `.txt`, `.md`, or `.markdown` files. Streamlit and
 the authoritative backend validation both use the default 50 MB upload limit. Browser MIME values
 are not trusted.
 
-Processing begins only after **Process and Index Document** is selected:
+Processing begins only after **Process documents** is selected. Files are processed sequentially:
 
 1. write the bytes under the application-controlled document directory with a collision-resistant
    stored filename;
@@ -51,7 +54,7 @@ Processing begins only after **Process and Index Document** is selected:
 5. persist metadata and chunks as `PENDING_EMBEDDING`;
 6. load the local embedding model and generate validated float32 embeddings;
 7. persist embeddings and mark the document `INDEXED`;
-8. unload the embedding model.
+8. keep the embedding model warm in Balanced/Fast mode or unload it in Memory saver mode.
 
 The UI reports real stage boundaries rather than estimated percentages. A successful summary shows
 only safe metadata: original filename, type, size, page/section counts when available, chunk counts,
@@ -61,18 +64,17 @@ text, and vectors are not shown.
 Exact duplicates are not parsed, chunked, or indexed again. The temporary duplicate copy is removed
 and the existing safe filename and status are displayed as an informational result.
 
-The document status table displays original filename, type, status, file size, pages, chunk counts,
-upload/index times, and embedding model. **Refresh document status** performs a short read only; it
-does not parse, index, or load a model. Phase 7 intentionally has no delete, re-index, or complete
-Knowledge Base management controls.
+One failed file does not prevent later valid files from processing. Exact duplicates are reported
+per file and are not re-indexed. A minimal retry-indexing action is available for failed or pending
+documents, but deletion and full Knowledge Base management remain Phase 8 work.
 
 ## Ask GroundNote View
 
-Only `INDEXED` documents appear as optional source filters. Users may select documents and file
-types; empty selections mean all indexed documents. The selected IDs are validated against current
-indexed records before a RAG request is created.
+Only `INDEXED` documents appear as optional source filters in the sidebar. Users may select
+documents and file types; empty selections mean all indexed documents. The selected IDs are
+validated against current indexed records before a RAG request is created.
 
-Each submitted question is independent:
+Each submitted document question:
 
 1. validate the question and current source filters;
 2. call the existing RAG service once;
@@ -82,8 +84,10 @@ Each submitted question is independent:
 6. unload the chat model;
 7. validate citations and render the answer.
 
-The latest question and answer may remain in the current browser session. GroundNote does not store
-persistent conversation history, reuse previous answers, or perform history-aware retrieval.
+Greetings, thanks, and app-help messages return immediate localized responses without retrieval,
+embedding, or chat model loading.
+
+Conversation history is stored only in `st.session_state`. It is not persisted to SQLite.
 
 ## Answers And Citations
 
@@ -123,7 +127,8 @@ content again.
 - No Azure OpenAI, paid cloud API, or cloud fallback exists.
 - Model downloads require internet once; cached inference is local.
 - Selecting a file, starting the app, and refreshing status load no model.
-- Embedding and chat models are loaded only for their operation and unloaded afterward.
+- Balanced and Fast modes may keep models warm after first use.
+- Memory saver unloads models after each operation.
 - Model inference does not run while a SQLite write transaction is held.
 - Logs contain safe counts, categories, model names, statuses, and durations—not private content.
 

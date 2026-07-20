@@ -103,13 +103,16 @@ class RagService:
             return answer
 
         citation_map = validate_citation_map(context_items)
-        answer_text, citation_ids, retries = self._generate_with_citations(
+        answer_text, citation_ids, retries, status = self._generate_with_citations(
             query=query,
             context_items=context_items,
             language=language,
             citation_map=citation_map,
         )
-        if indicates_insufficient_evidence(answer_text, language=language):
+        if status == "insufficient" or indicates_insufficient_evidence(
+            answer_text,
+            language=language,
+        ):
             answer = self._insufficient_evidence_answer(
                 language=language,
                 retrieved_count=retrieval.returned_count,
@@ -143,7 +146,7 @@ class RagService:
         context_items: list[RagContextItem],
         language: str,
         citation_map: dict[str, Citation],
-    ) -> tuple[str, list[str], int]:
+    ) -> tuple[str, list[str], int, str]:
         allowed_ids = set(citation_map)
         for attempt in range(2):
             prompt = build_prompt(
@@ -154,11 +157,14 @@ class RagService:
                 repair=attempt == 1,
             )
             result_text = self._call_chat(prompt.system_prompt, prompt.user_prompt)
-            cleaned = validate_answer_text(result_text, allowed_ids=allowed_ids)
+            status, body = parse_grounded_status(result_text)
+            cleaned = validate_answer_text(body, allowed_ids=allowed_ids)
+            if status == "insufficient":
+                return cleaned, [], attempt, status
             citation_ids = extract_citation_ids(cleaned, allowed_ids)
             cleaned = strip_unknown_citations(cleaned, allowed_ids).strip()
             if citation_ids:
-                return cleaned, citation_ids, attempt
+                return cleaned, citation_ids, attempt, status
         if self.settings.rag_require_citations:
             raise CitationValidationError("Generated answer did not contain valid citations.")
         raise InvalidChatResponseError("Generated answer did not contain valid citations.")
@@ -182,7 +188,8 @@ class RagService:
         except Exception as exc:
             raise ChatGenerationError("Local chat generation failed.") from exc
         finally:
-            self._unload_chat_model()
+            if not self.settings.keep_models_loaded:
+                self._unload_chat_model()
 
     def _unload_chat_model(self) -> None:
         try:
@@ -258,6 +265,20 @@ def validate_answer_text(answer: str, *, allowed_ids: set[str]) -> str:
     return cleaned
 
 
+def parse_grounded_status(text: str) -> tuple[str, str]:
+    """Parse the optional GroundNote STATUS contract conservatively."""
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    lines = cleaned.splitlines()
+    if not lines:
+        return "supported", cleaned
+    first = lines[0].strip().casefold()
+    if first == "status: supported":
+        return "supported", "\n".join(lines[1:]).strip()
+    if first == "status: insufficient":
+        return "insufficient", "\n".join(lines[1:]).strip()
+    return "supported", cleaned
+
+
 def insufficient_evidence_text(language: str) -> str:
     """Return deterministic no-answer text in the resolved language."""
     if language == "tr":
@@ -279,6 +300,10 @@ def indicates_insufficient_evidence(answer: str, *, language: str) -> bool:
         "not enough evidence",
         "do not contain enough evidence",
         "does not contain enough evidence",
+        "does not contain specific information",
+        "does not describe",
+        "provided context is unrelated",
+        "retrieved context is unrelated",
         "could not find the answer",
         "cannot find the answer",
         "answer was not found",

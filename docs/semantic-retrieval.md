@@ -1,7 +1,7 @@
 # Semantic Retrieval
 
-Phase 5 adds local semantic retrieval over indexed chunk embeddings. It returns ranked source
-chunks and citation metadata. Phase 6 uses these results for grounded RAG answers.
+GroundNote retrieves local document chunks with hybrid semantic and lexical ranking. It returns
+ranked source chunks and citation metadata. RAG generation uses these results for grounded answers.
 
 ## Query Embedding
 
@@ -14,6 +14,10 @@ query is not lowercased, translated, or sent to a chat model.
 Retrieval loads only chunk embeddings from `INDEXED` documents and only when the stored embedding
 model and embedding version match the active configuration. `PENDING_EMBEDDING`, `INDEXING`,
 `FAILED`, and incompatible documents are excluded.
+
+All eligible compatible embeddings are loaded before similarity scoring. The database row order no
+longer decides which chunks are eligible, so long documents and later documents are not starved by a
+pre-scoring SQL limit.
 
 ## Similarity
 
@@ -31,14 +35,21 @@ MVP defaults:
 - candidate limit: `50`.
 - minimum score: `0.20`.
 
-`top_k` is bounded to 20 and the candidate limit is bounded to 500. Filters currently support:
+`top_k` is bounded to 20 and the candidate limit is bounded to 500. The candidate limit is now a
+post-ranking limit. Filters currently support:
 
 - document IDs;
 - source file type;
 - page number;
 - minimum score.
 
-No complex query language is implemented.
+SQLite FTS5 is used when available for lexical matching over chunk content, section titles, and
+filenames. Lexical and vector rankings are combined deterministically with boosts for headings,
+numbered terms, and exact filename/section matches. If FTS5 is unavailable, retrieval falls back to
+vector-only behavior.
+
+Conservative typo expansion is retrieval-only. It corrects only unambiguous one-edit tokens from
+the local corpus vocabulary and does not rewrite the displayed user question.
 
 ## Stable Ordering
 
@@ -75,6 +86,6 @@ or absolute local file paths.
 
 ## Current Limitations
 
-- Semantic retrieval does not guarantee perfect relevance.
+- Hybrid retrieval does not guarantee perfect relevance.
 - Answer generation is implemented in the separate Phase 6 RAG service, not in retrieval.
 - No Streamlit search or chat UI is implemented yet.

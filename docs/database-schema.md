@@ -37,6 +37,13 @@ erDiagram
         TEXT embedding_dtype
         TEXT created_at
     }
+    document_chunks_fts {
+        TEXT chunk_id
+        TEXT document_id
+        TEXT content
+        TEXT section_title
+        TEXT source_filename
+    }
     application_metadata {
         TEXT key PK
         TEXT value
@@ -56,6 +63,9 @@ detection data, indexing status, timestamps, and future embedding/chunking metad
 
 `document_chunks` stores text chunks for future indexing. Embeddings are stored as compact BLOB
 values and linked to documents with `ON DELETE CASCADE`.
+
+`document_chunks_fts` is a SQLite FTS5 virtual table used for local lexical retrieval over chunk
+content, section titles, and source filenames.
 
 `application_metadata` stores simple key-value application metadata.
 
@@ -88,5 +98,5 @@ run repeatedly.
 
 ## Current Limitations
 
-Phase 2 does not implement parsing, ingestion, semantic retrieval, or RAG generation. Full-text
-search and vector database extensions are intentionally not included.
+GroundNote uses SQLite FTS5 for lexical retrieval when available. It does not use a remote search
+service, external vector database, or cloud-hosted retrieval system.

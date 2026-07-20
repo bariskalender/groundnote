@@ -15,6 +15,7 @@ from groundnote.rag.errors import (
     UnsupportedResponseLanguageError,
 )
 from groundnote.rag.models import Citation, RagAnswer, RagContextItem, RagRequest, RagResponse
+from groundnote.rag.router import QueryIntent, RoutedQuery, deterministic_response, route_query
 from groundnote.rag.service import RagService
 
 __all__ = [
@@ -28,6 +29,7 @@ __all__ = [
     "InvalidChatResponseError",
     "NoRelevantContextError",
     "PromptConstructionError",
+    "QueryIntent",
     "RagAnswer",
     "RagContextItem",
     "RagError",
@@ -35,5 +37,8 @@ __all__ = [
     "RagResponse",
     "RagRetrievalError",
     "RagService",
+    "RoutedQuery",
     "UnsupportedResponseLanguageError",
+    "deterministic_response",
+    "route_query",
 ]

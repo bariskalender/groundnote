@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -47,6 +48,14 @@ class SearchableChunkEmbedding:
     embedding: npt.NDArray[np.float32]
     original_filename: str
     file_type: SupportedFileType
+
+
+@dataclass(frozen=True)
+class LexicalChunkMatch:
+    """FTS lexical match for one indexed chunk."""
+
+    chunk_id: str
+    rank: float
 
 
 class DocumentRepository(Protocol):
@@ -103,7 +112,32 @@ class VectorRepository(Protocol):
         page_numbers: list[int] | None = None,
         limit: int | None = None,
     ) -> list[SearchableChunkEmbedding]: ...
+    def search_lexical_chunks(
+        self,
+        *,
+        query: str,
+        embedding_model: str,
+        embedding_version: str,
+        document_ids: list[str] | None = None,
+        file_types: list[SupportedFileType] | None = None,
+        page_numbers: list[int] | None = None,
+        limit: int = 50,
+    ) -> list[LexicalChunkMatch]: ...
     def get_chunks_by_ids(self, chunk_ids: list[str]) -> list[DocumentChunk]: ...
+    def get_searchable_chunks_by_ids(
+        self,
+        chunk_ids: list[str],
+        *,
+        embedding_model: str,
+        embedding_version: str,
+    ) -> list[SearchableChunkEmbedding]: ...
+    def vocabulary_terms(
+        self,
+        *,
+        document_ids: list[str] | None = None,
+        file_types: list[SupportedFileType] | None = None,
+        limit: int = 5000,
+    ) -> list[str]: ...
     def clear_embeddings_for_document(self, document_id: str) -> None: ...
     def count_indexed_chunks(self) -> int: ...
     def count_embedded_chunks_for_document(self, document_id: str) -> int: ...
@@ -230,6 +264,7 @@ class SQLiteVectorRepository:
                 """,
                 [_chunk_values(chunk, embedding) for chunk, embedding in chunks],
             )
+            self._upsert_fts_rows([chunk for chunk, _ in chunks])
         except sqlite3.Error as exc:
             raise StorageError("Could not add document chunks.") from exc
 
@@ -301,6 +336,7 @@ class SQLiteVectorRepository:
                     for chunk_id, embedding in embeddings
                 ],
             )
+            self._sync_fts_rows_for_chunk_ids([chunk_id for chunk_id, _ in embeddings])
         except sqlite3.Error as exc:
             raise StorageError("Could not save chunk embeddings.") from exc
         if cursor.rowcount != len(embeddings):
@@ -358,6 +394,66 @@ class SQLiteVectorRepository:
         rows = self._connection.execute(query, tuple(parameters)).fetchall()
         return [_searchable_embedding_from_row(row) for row in rows]
 
+    def search_lexical_chunks(
+        self,
+        *,
+        query: str,
+        embedding_model: str,
+        embedding_version: str,
+        document_ids: list[str] | None = None,
+        file_types: list[SupportedFileType] | None = None,
+        page_numbers: list[int] | None = None,
+        limit: int = 50,
+    ) -> list[LexicalChunkMatch]:
+        if not query.strip() or limit <= 0:
+            return []
+        clauses = [
+            "document_chunks_fts MATCH ?",
+            "d.status = ?",
+            "c.embedding IS NOT NULL",
+            "c.embedding_model = ?",
+            "c.embedding_version = ?",
+        ]
+        parameters: list[object] = [
+            query,
+            DocumentStatus.INDEXED.value,
+            embedding_model,
+            embedding_version,
+        ]
+        if document_ids is not None:
+            if not document_ids:
+                return []
+            clauses.append(f"c.document_id IN ({_placeholders(document_ids)})")
+            parameters.extend(document_ids)
+        if file_types is not None:
+            if not file_types:
+                return []
+            clauses.append(f"d.file_type IN ({_placeholders(file_types)})")
+            parameters.extend(file_type.value for file_type in file_types)
+        if page_numbers is not None:
+            if not page_numbers:
+                return []
+            clauses.append(f"c.page_number IN ({_placeholders(page_numbers)})")
+            parameters.extend(page_numbers)
+        parameters.append(limit)
+        sql = f"""
+            SELECT c.id AS chunk_id, bm25(document_chunks_fts, 1.0, 2.0, 0.8) AS rank
+            FROM document_chunks_fts
+            JOIN document_chunks c ON c.id = document_chunks_fts.chunk_id
+            JOIN documents d ON d.id = c.document_id
+            WHERE {" AND ".join(clauses)}
+            ORDER BY rank, c.document_id, c.chunk_index, c.id
+            LIMIT ?
+        """
+        try:
+            rows = self._connection.execute(sql, tuple(parameters)).fetchall()
+        except sqlite3.OperationalError:
+            return []
+        return [
+            LexicalChunkMatch(chunk_id=str(row["chunk_id"]), rank=float(row["rank"]))
+            for row in rows
+        ]
+
     def get_chunks_by_ids(self, chunk_ids: list[str]) -> list[DocumentChunk]:
         if not chunk_ids:
             return []
@@ -372,7 +468,80 @@ class SQLiteVectorRepository:
         ).fetchall()
         return [_chunk_from_row(row) for row in rows]
 
+    def get_searchable_chunks_by_ids(
+        self,
+        chunk_ids: list[str],
+        *,
+        embedding_model: str,
+        embedding_version: str,
+    ) -> list[SearchableChunkEmbedding]:
+        if not chunk_ids:
+            return []
+        placeholders = _placeholders(chunk_ids)
+        query = f"""
+            SELECT
+                c.*,
+                d.original_filename AS document_original_filename,
+                d.file_type AS document_file_type
+            FROM document_chunks c
+            JOIN documents d ON d.id = c.document_id
+            WHERE c.id IN ({placeholders})
+              AND d.status = ?
+              AND c.embedding IS NOT NULL
+              AND c.embedding_model = ?
+              AND c.embedding_version = ?
+            ORDER BY c.document_id, c.chunk_index, c.id
+        """
+        rows = self._connection.execute(
+            query,
+            (*chunk_ids, DocumentStatus.INDEXED.value, embedding_model, embedding_version),
+        ).fetchall()
+        return [_searchable_embedding_from_row(row) for row in rows]
+
+    def vocabulary_terms(
+        self,
+        *,
+        document_ids: list[str] | None = None,
+        file_types: list[SupportedFileType] | None = None,
+        limit: int = 5000,
+    ) -> list[str]:
+        clauses = ["d.status = ?"]
+        parameters: list[object] = [DocumentStatus.INDEXED.value]
+        if document_ids is not None:
+            if not document_ids:
+                return []
+            clauses.append(f"d.id IN ({_placeholders(document_ids)})")
+            parameters.extend(document_ids)
+        if file_types is not None:
+            if not file_types:
+                return []
+            clauses.append(f"d.file_type IN ({_placeholders(file_types)})")
+            parameters.extend(file_type.value for file_type in file_types)
+        parameters.append(limit)
+        rows = self._connection.execute(
+            f"""
+            SELECT c.section_title, d.original_filename
+            FROM document_chunks c
+            JOIN documents d ON d.id = c.document_id
+            WHERE {" AND ".join(clauses)}
+            ORDER BY d.created_at, c.chunk_index
+            LIMIT ?
+            """,
+            tuple(parameters),
+        ).fetchall()
+        terms: set[str] = set()
+        for row in rows:
+            for value in (row["section_title"], row["original_filename"]):
+                if value is None:
+                    continue
+                terms.update(_tokenize_vocabulary(str(value)))
+        return sorted(terms)
+
     def delete_for_document(self, document_id: str) -> None:
+        self._connection.execute(
+            "DELETE FROM document_chunks_fts WHERE document_id = ?",
+            (document_id,),
+        )
         self._connection.execute(
             "DELETE FROM document_chunks WHERE document_id = ?",
             (document_id,),
@@ -390,6 +559,7 @@ class SQLiteVectorRepository:
         )
 
     def clear_all_chunks(self) -> None:
+        self._connection.execute("DELETE FROM document_chunks_fts")
         self._connection.execute("DELETE FROM document_chunks")
 
     def clear_embeddings_for_document(self, document_id: str) -> None:
@@ -406,6 +576,56 @@ class SQLiteVectorRepository:
             """,
             (document_id,),
         )
+
+    def _upsert_fts_rows(self, chunks: list[DocumentChunk]) -> None:
+        if not chunks:
+            return
+        document_ids = list({chunk.document_id for chunk in chunks})
+        placeholders = _placeholders(document_ids)
+        rows = self._connection.execute(
+            f"SELECT id, original_filename FROM documents WHERE id IN ({placeholders})",
+            tuple(document_ids),
+        ).fetchall()
+        filenames = {str(row["id"]): str(row["original_filename"]) for row in rows}
+        try:
+            self._connection.executemany(
+                """
+                INSERT OR REPLACE INTO document_chunks_fts (
+                    rowid, chunk_id, document_id, content, section_title, source_filename
+                )
+                SELECT rowid, ?, ?, ?, ?, ?
+                FROM document_chunks
+                WHERE id = ?
+                """,
+                [
+                    (
+                        chunk.id,
+                        chunk.document_id,
+                        chunk.content,
+                        chunk.section_title or "",
+                        filenames.get(chunk.document_id, ""),
+                        chunk.id,
+                    )
+                    for chunk in chunks
+                ],
+            )
+        except sqlite3.OperationalError:
+            return
+
+    def _sync_fts_rows_for_chunk_ids(self, chunk_ids: list[str]) -> None:
+        if not chunk_ids:
+            return
+        placeholders = _placeholders(chunk_ids)
+        rows = self._connection.execute(
+            f"""
+            SELECT c.*, d.original_filename AS document_original_filename
+            FROM document_chunks c
+            JOIN documents d ON d.id = c.document_id
+            WHERE c.id IN ({placeholders})
+            """,
+            tuple(chunk_ids),
+        ).fetchall()
+        self._upsert_fts_rows([_chunk_from_row(row) for row in rows])
 
     def count_indexed_chunks(self) -> int:
         return int(
@@ -550,6 +770,10 @@ def _searchable_embedding_from_row(row: sqlite3.Row) -> SearchableChunkEmbedding
 
 def _placeholders(values: Sequence[object]) -> str:
     return ",".join("?" for _ in values)
+
+
+def _tokenize_vocabulary(text: str) -> set[str]:
+    return {token.casefold() for token in re.findall(r"[\w.-]{5,}", text, flags=re.UNICODE)}
 
 
 def _datetime_to_text(value: datetime) -> str:

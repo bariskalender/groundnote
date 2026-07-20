@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import time
+from dataclasses import dataclass
 from typing import Protocol
+from uuid import uuid4
 
 
 class SessionStateLike(Protocol):
@@ -23,6 +26,13 @@ LAST_RAG_ANSWER = "last_rag_answer"
 CURRENT_FILTERS = "current_filters"
 UI_NOTIFICATIONS = "ui_notifications"
 QUESTION_IN_PROGRESS = "question_in_progress"
+ACTIVE_OPERATION = "active_operation"
+CHAT_MESSAGES = "chat_messages"
+UI_LANGUAGE = "ui_language"
+PERFORMANCE_MODE = "performance_mode"
+ANSWER_LANGUAGE = "answer_language"
+LAST_SUBMITTED_QUESTION = "last_submitted_question"
+OPERATION_STALE_SECONDS = 600.0
 
 DEFAULT_SESSION_STATE: dict[str, object] = {
     ACTIVE_PAGE: "Documents",
@@ -36,6 +46,12 @@ DEFAULT_SESSION_STATE: dict[str, object] = {
     CURRENT_FILTERS: {"document_ids": [], "file_types": []},
     UI_NOTIFICATIONS: [],
     QUESTION_IN_PROGRESS: False,
+    ACTIVE_OPERATION: None,
+    CHAT_MESSAGES: [],
+    UI_LANGUAGE: "en",
+    PERFORMANCE_MODE: "Balanced",
+    ANSWER_LANGUAGE: "auto",
+    LAST_SUBMITTED_QUESTION: None,
 }
 
 
@@ -48,6 +64,59 @@ def initialize_session_state(state: SessionStateLike) -> None:
 
 def clear_operation_flags(state: SessionStateLike) -> None:
     """Recover safe idle flags after an interrupted Streamlit operation."""
+    state[UPLOAD_IN_PROGRESS] = False
+    state[INDEXING_IN_PROGRESS] = False
+    state[QUESTION_IN_PROGRESS] = False
+    state[ACTIVE_OPERATION] = None
+
+
+@dataclass(frozen=True)
+class OperationState:
+    """Recoverable Streamlit operation state."""
+
+    operation_id: str
+    operation_type: str
+    started_at: float
+    active: bool = True
+    last_completed_at: float | None = None
+
+
+def operation_is_active(state: object) -> bool:
+    """Return true only for a non-stale active operation object."""
+    if not isinstance(state, OperationState):
+        return False
+    return state.active and (time.time() - state.started_at) <= OPERATION_STALE_SECONDS
+
+
+def begin_operation(state: SessionStateLike, operation_type: str) -> OperationState:
+    """Start one recoverable operation."""
+    operation = OperationState(
+        operation_id=str(uuid4()),
+        operation_type=operation_type,
+        started_at=time.time(),
+    )
+    state[ACTIVE_OPERATION] = operation
+    if operation_type == "upload":
+        state[UPLOAD_IN_PROGRESS] = True
+    if operation_type == "question":
+        state[QUESTION_IN_PROGRESS] = True
+    return operation
+
+
+def end_operation(state: SessionStateLike, operation: OperationState) -> None:
+    """Release the active operation if it still matches this run."""
+    current = getattr(state, "get", lambda _key, _default=None: _default)(
+        ACTIVE_OPERATION,
+        None,
+    )
+    if isinstance(current, OperationState) and current.operation_id == operation.operation_id:
+        state[ACTIVE_OPERATION] = OperationState(
+            operation_id=operation.operation_id,
+            operation_type=operation.operation_type,
+            started_at=operation.started_at,
+            active=False,
+            last_completed_at=time.time(),
+        )
     state[UPLOAD_IN_PROGRESS] = False
     state[INDEXING_IN_PROGRESS] = False
     state[QUESTION_IN_PROGRESS] = False

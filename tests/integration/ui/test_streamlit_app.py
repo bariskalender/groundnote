@@ -8,7 +8,7 @@ from streamlit.testing.v1 import AppTest
 from groundnote.app import get_application_context
 
 
-def test_streamlit_application_starts_with_documents_and_ask_views(
+def test_streamlit_application_starts_with_chat_first_sidebar(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -20,15 +20,11 @@ def test_streamlit_application_starts_with_documents_and_ask_views(
 
     assert not app.exception
     assert app.title[0].value == "GroundNote"
-    assert any(header.value == "Documents" for header in app.header)
+    assert app.title[0].value == "GroundNote"
     assert len(app.file_uploader) == 1
-    assert any("No documents" in info.value for info in app.info)
-
-    app.radio[0].set_value("Ask GroundNote").run()
-
-    assert not app.exception
-    assert any(header.value == "Ask GroundNote" for header in app.header)
     assert any("No indexed documents" in info.value for info in app.info)
+    assert len(app.chat_input) == 1
+    assert any(button.label == "New chat" for button in app.button)
     context = get_application_context()
     embedding = context.embedding_provider
     chat = context.chat_provider

@@ -259,3 +259,37 @@ GroundNote now recognizes a small conservative set of explicit English and Turki
 insufficient-evidence phrases after normal answer validation. Such output is replaced with the
 existing deterministic language-matched insufficient-evidence response, all citations are removed,
 and the UI displays an informational no-evidence state. Normal grounded answers remain unchanged.
+
+## ADR-0027: Use Hybrid Local Retrieval For Stabilization
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Phase 7.1 removes the arbitrary pre-scoring SQL limit from semantic retrieval. All compatible
+indexed vectors are eligible before NumPy scoring, which is acceptable for the MVP target of roughly
+100-1500 chunks. SQLite FTS5 is added for local lexical matching over chunk content, section titles,
+and filenames, then combined with vector ranking using deterministic boosts and tie-breaking.
+
+This keeps retrieval local and understandable without adding an external search framework, vector
+database, LangChain, LlamaIndex, or cloud service.
+
+## ADR-0028: Route Simple Chat UX Messages Before RAG
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Greetings, thanks, and app-help questions are handled by a deterministic local router before
+retrieval. These messages do not load the embedding model, do not load the chat model, do not search
+documents, and do not produce citations. GroundNote remains a document assistant; document questions
+continue through grounded RAG.
+
+## ADR-0029: Keep Models Warm In Interactive Balanced Mode
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Phase 7 unloaded embedding and chat models after every operation, which made interactive use slow.
+Phase 7.1 keeps application startup lightweight but allows models to remain loaded after first use
+in Balanced mode. Fast mode uses the smaller fallback chat model with a lower output limit. Memory
+saver mode and the explicit sidebar unload action release local models when the user prefers lower
+memory usage over latency.

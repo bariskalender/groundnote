@@ -5,12 +5,20 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal, cast
 
 from groundnote.config import Settings
 from groundnote.documents import DuplicateDocumentError
 from groundnote.documents.uploads import write_uploaded_bytes
 from groundnote.domain import Document, DocumentStatus, SupportedFileType
-from groundnote.rag import RagRequest, RagService
+from groundnote.rag import (
+    QueryIntent,
+    RagAnswer,
+    RagRequest,
+    RagService,
+    deterministic_response,
+    route_query,
+)
 from groundnote.services import DocumentIndexingService, PreEmbeddingIngestionService
 from groundnote.storage import SQLiteUnitOfWorkFactory
 from groundnote.ui.errors import InvalidFilterError, NoFileSelectedError, NoIndexedDocumentsError
@@ -169,8 +177,31 @@ class QuestionWorkflow:
         document_ids: list[str] | None = None,
         file_types: list[SupportedFileType] | None = None,
         minimum_score: float | None = None,
+        response_language: str | None = None,
     ) -> QuestionOutcome:
         """Answer once, forwarding validated source filters without persistent history."""
+        started = time.perf_counter()
+        routed = route_query(question, response_language=response_language)
+        if routed.intent is not QueryIntent.DOCUMENT_QUESTION:
+            answer = RagAnswer(
+                answer=deterministic_response(routed.intent, language=routed.language),
+                citations=[],
+                grounded=False,
+                insufficient_evidence=False,
+                response_language=cast(Literal["tr", "en"], routed.language),
+                model="deterministic-router",
+                prompt_version="intent-router-v1",
+                retrieved_count=0,
+                used_context_count=0,
+                warnings=[f"intent_{routed.intent.value}"],
+                duration_ms=_elapsed_ms(started),
+            )
+            return QuestionOutcome(
+                question=question.strip(),
+                answer=answer,
+                document_ids=(),
+                file_types=(),
+            )
         indexed = self.document_workflow.indexed_documents()
         if not indexed:
             raise NoIndexedDocumentsError("No indexed documents are available.")
@@ -180,6 +211,7 @@ class QuestionWorkflow:
             document_ids=document_ids,
             file_types=file_types,
             minimum_score=minimum_score,
+            response_language=response_language,
         )
         answer = self.rag_service.answer(request)
         return QuestionOutcome(
@@ -197,6 +229,7 @@ def build_rag_request(
     document_ids: list[str] | None,
     file_types: list[SupportedFileType] | None,
     minimum_score: float | None = None,
+    response_language: str | None = None,
 ) -> RagRequest:
     """Build a filter-safe request; empty selections mean all indexed documents."""
     allowed_ids = {document.document_id for document in indexed_documents}
@@ -207,12 +240,16 @@ def build_rag_request(
     selected_types = list(dict.fromkeys(file_types or []))
     if any(file_type not in allowed_types for file_type in selected_types):
         raise InvalidFilterError("A selected file type is invalid.")
+    resolved_language = cast(
+        Literal["tr", "en", "auto"],
+        response_language if response_language in {"tr", "en"} else "auto",
+    )
     return RagRequest(
         query=question,
         document_ids=selected_ids or None,
         file_types=selected_types or None,
         minimum_score=minimum_score,
-        response_language="auto",
+        response_language=resolved_language,
     )
 
 

@@ -36,6 +36,7 @@ class RetrievalResult:
     source_start_order: int | None
     source_end_order: int | None
     metadata: dict[str, object] = field(default_factory=dict)
+    retrieval_mode: str = "semantic"
 
 
 @dataclass(frozen=True)
@@ -49,3 +50,4 @@ class RetrievalResponse:
     embedding_model: str
     duration_ms: float
     warnings: list[str] = field(default_factory=list)
+    stage_timings_ms: dict[str, float] = field(default_factory=dict)

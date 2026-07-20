@@ -30,6 +30,9 @@ local embedding model variant. This remains local-only and does not fall back to
 Chunks are embedded sequentially in configured batches. Input order is preserved and the final
 partial batch is supported. Empty inputs are rejected. No concurrent model calls are made.
 
+In Balanced and Fast UI modes, the embedding model may remain warm after first use for the current
+Streamlit session. Memory saver mode unloads it after each operation.
+
 ## Serialization And SQLite Storage
 
 Embeddings are serialized as compact `float32` bytes by the existing storage codec. Pickle and JSON

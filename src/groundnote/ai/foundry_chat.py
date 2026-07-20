@@ -38,6 +38,8 @@ class FoundryChatProvider:
         return self._manager.get_model_info(self.model_alias)
 
     def load(self) -> None:
+        if self._client is not None or self._local_service_client is not None:
+            return
         try:
             self._model = self._manager.get_model(self.model_alias)
             self._model.load()

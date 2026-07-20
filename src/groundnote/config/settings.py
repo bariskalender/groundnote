@@ -105,14 +105,22 @@ class Settings(BaseSettings):
 
     rag_retrieval_top_k: int = 5
     rag_minimum_score: float = 0.20
-    rag_max_context_characters: int = 8000
+    rag_max_context_characters: int = 6000
     rag_max_chunk_count: int = 5
     rag_temperature: float = 0.1
-    rag_max_output_tokens: int = 700
+    rag_max_output_tokens: int = 512
     rag_prompt_version: str = "grounded-rag-v1"
     rag_require_citations: bool = True
     rag_insufficient_evidence_mode: str = "explicit"
     rag_max_query_characters: int = 4000
+    keep_models_loaded: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("GROUNDNOTE_KEEP_MODELS_LOADED"),
+    )
+    fast_chat_model: str = Field(
+        default="qwen2.5-0.5b",
+        validation_alias=AliasChoices("GROUNDNOTE_FAST_CHAT_MODEL"),
+    )
 
     @model_validator(mode="after")
     def fill_default_paths(self) -> Settings:
@@ -220,7 +228,7 @@ class Settings(BaseSettings):
             raise ValueError("temperature must be between 0.0 and 2.0.")
         return value
 
-    @field_validator("chat_model", "fallback_chat_model", "rag_prompt_version")
+    @field_validator("chat_model", "fallback_chat_model", "fast_chat_model", "rag_prompt_version")
     @classmethod
     def chat_text_settings_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():

@@ -33,14 +33,17 @@ class ApplicationContext:
     foundry_manager: FoundryManager
     embedding_provider: BatchEmbeddingProvider
     chat_provider: ChatProvider
+    fast_chat_provider: ChatProvider
     embedding_service: EmbeddingService
     document_processing_service: DocumentProcessingService
     ingestion_service: PreEmbeddingIngestionService
     indexing_service: DocumentIndexingService
     retrieval_service: SemanticRetrievalService
     rag_service: RagService
+    fast_rag_service: RagService
     document_workflow: DocumentWorkflow
     question_workflow: QuestionWorkflow
+    fast_question_workflow: QuestionWorkflow
     foundry_status_service: FoundryStatusService
 
 
@@ -71,6 +74,7 @@ def build_application_context(
         resolved_settings.chat_model,
         manager,
     )
+    fast_chat_provider = FoundryChatProvider(resolved_settings.fast_chat_model, manager)
     embedding_service = EmbeddingService(
         settings=resolved_settings,
         provider=resolved_embedding_provider,
@@ -95,6 +99,16 @@ def build_application_context(
         retrieval_service=retrieval_service,
         chat_provider=resolved_chat_provider,
     )
+    fast_settings = resolved_settings.model_copy(
+        update={
+            "rag_max_output_tokens": min(resolved_settings.rag_max_output_tokens, 256),
+        }
+    )
+    fast_rag_service = RagService(
+        settings=fast_settings,
+        retrieval_service=retrieval_service,
+        chat_provider=fast_chat_provider,
+    )
     document_workflow = DocumentWorkflow(
         settings=resolved_settings,
         unit_of_work_factory=unit_of_work_factory,
@@ -105,6 +119,10 @@ def build_application_context(
         document_workflow=document_workflow,
         rag_service=rag_service,
     )
+    fast_question_workflow = QuestionWorkflow(
+        document_workflow=document_workflow,
+        rag_service=fast_rag_service,
+    )
     return ApplicationContext(
         dependencies=dependencies,
         settings=resolved_settings,
@@ -113,13 +131,31 @@ def build_application_context(
         foundry_manager=manager,
         embedding_provider=resolved_embedding_provider,
         chat_provider=resolved_chat_provider,
+        fast_chat_provider=fast_chat_provider,
         embedding_service=embedding_service,
         document_processing_service=document_processing_service,
         ingestion_service=ingestion_service,
         indexing_service=indexing_service,
         retrieval_service=retrieval_service,
         rag_service=rag_service,
+        fast_rag_service=fast_rag_service,
         document_workflow=document_workflow,
         question_workflow=question_workflow,
+        fast_question_workflow=fast_question_workflow,
         foundry_status_service=foundry_status_service or FoundryStatusService(),
     )
+
+
+def unload_local_models(context: ApplicationContext) -> list[str]:
+    """Best-effort local model cleanup for the current Streamlit session."""
+    warnings: list[str] = []
+    for name, provider in (
+        ("embedding", context.embedding_service),
+        ("chat", context.chat_provider),
+        ("fast_chat", context.fast_chat_provider),
+    ):
+        try:
+            provider.unload()
+        except Exception:
+            warnings.append(f"{name}_unload_failed")
+    return warnings

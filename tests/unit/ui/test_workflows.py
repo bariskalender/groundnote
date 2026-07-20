@@ -89,7 +89,7 @@ def test_duplicate_upload_does_not_index_or_create_another_file(tmp_path: Path) 
     assert len(context.document_workflow.list_documents()) == 1
     assert context.settings.document_directory is not None
     assert len(list(context.settings.document_directory.iterdir())) == 1
-    assert embedding.loaded is False
+    assert embedding.loaded is True
 
 
 def test_no_file_and_ingestion_failure_stop_before_indexing_and_cleanup(tmp_path: Path) -> None:
@@ -158,7 +158,7 @@ def test_question_orchestration_forwards_filters_and_returns_one_latest_answer(
     assert outcome.answer.citations[0].source_filename == "notes.md"
     assert outcome.document_ids == (upload.document.document_id,)
     assert chat.calls == 1
-    assert chat.loaded is False
+    assert chat.loaded is True
 
 
 def test_question_without_indexed_document_fails_before_provider_call(tmp_path: Path) -> None:

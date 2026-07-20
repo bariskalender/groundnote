@@ -25,8 +25,9 @@ def render_documents_page(context: ApplicationContext) -> None:
     st.header("Documents")
     st.caption("Uploads remain local. OCR is not supported in this version.")
     uploaded, confirmed = render_upload_control(context.settings.maximum_upload_size_mb)
-    if confirmed and uploaded is not None:
-        _process_upload(context, uploaded)
+    if confirmed and uploaded:
+        for file in uploaded:
+            _process_upload(context, file)
     previous = st.session_state.get(LAST_UPLOAD_RESULT)
     if isinstance(previous, UploadOutcome):
         render_upload_outcome(previous)

@@ -18,21 +18,26 @@ from groundnote.ui.models import UploadOutcome, UploadOutcomeKind
 SUPPORTED_EXTENSIONS = ["pdf", "docx", "txt", "md", "markdown"]
 
 
-def render_upload_control(maximum_size_mb: int) -> tuple[Any | None, bool]:
-    """Render one-file upload selection and explicit confirmation action."""
-    st.subheader("Upload a document")
-    st.write(f"Choose one supported file. The configured maximum size is {maximum_size_mb} MB.")
+def render_upload_control(maximum_size_mb: int) -> tuple[list[Any], bool]:
+    """Render multiple-file upload selection and explicit confirmation action."""
+    st.subheader("Upload documents")
+    st.write(f"Choose supported files. The configured maximum size is {maximum_size_mb} MB.")
     st.caption("The browser file type is not trusted; GroundNote validates the content locally.")
-    uploaded = st.file_uploader(
+    uploaded_files = st.file_uploader(
         "PDF, DOCX, TXT, or Markdown",
         type=SUPPORTED_EXTENSIONS,
-        accept_multiple_files=False,
+        accept_multiple_files=True,
         help="OCR is not supported. Use text-based PDFs.",
     )
+    uploaded = list(uploaded_files or [])
+    if uploaded:
+        st.caption(f"{len(uploaded)} file(s) selected.")
+        for file in uploaded:
+            st.caption(str(getattr(file, "name", "selected file")))
     confirmed = st.button(
-        "Process and Index Document",
+        "Process documents",
         type="primary",
-        disabled=uploaded is None,
+        disabled=not uploaded,
         use_container_width=False,
     )
     return uploaded, confirmed

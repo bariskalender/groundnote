@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from groundnote.domain import DocumentStatus, SupportedFileType
-from groundnote.rag import RagAnswer
+from groundnote.rag import Citation, RagAnswer
 
 
 class UploadOutcomeKind(StrEnum):
@@ -77,3 +77,16 @@ class QuestionOutcome:
     answer: RagAnswer
     document_ids: tuple[str, ...]
     file_types: tuple[SupportedFileType, ...]
+
+
+@dataclass(frozen=True)
+class ChatMessageState:
+    """Session-only chat message safe for Streamlit state."""
+
+    message_id: str
+    role: str
+    text: str
+    citations: tuple[Citation, ...] = ()
+    status: str = "complete"
+    duration_ms: float | None = None
+    warnings: tuple[str, ...] = ()

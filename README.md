@@ -34,7 +34,10 @@ including deletion and re-index controls, remains future work.
 - Deterministic hybrid recursive chunking and pre-embedding ingestion.
 - Local embedding indexing and semantic retrieval.
 - Grounded single-turn RAG answer generation with citations.
-- Streamlit document upload, indexing status, grounded Q&A, and trusted citation interface.
+- Chat-first Streamlit document upload, indexing, grounded Q&A, session history, and trusted
+  citation interface.
+- Hybrid lexical/vector retrieval with conservative typo-tolerant search.
+- Multiple-file upload, English/Turkish UI text, New chat, and performance modes.
 - Safe duplicate and insufficient-evidence presentation.
 - Unit tests.
 - Ruff and mypy checks.
@@ -98,21 +101,22 @@ uv run pytest -m "not foundry"
 - Phase 6 completed locally.
 - Pre-Phase 7 UI readiness audit completed locally.
 - Phase 7 completed locally.
+- Phase 7.1 stabilization completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
 - Semantic retrieval returns ranked chunks with citation metadata.
 - Grounded single-turn RAG answer generation is implemented with citation validation.
-- The Streamlit interface supports secure upload, local indexing, document status, single-turn
-  questions, trusted citations, and insufficient-evidence results.
-- Persistent conversation memory is intentionally not implemented.
+- The Streamlit interface supports secure multi-file upload, local indexing, session-only chat,
+  trusted citations, compact source display, and insufficient-evidence results.
+- Persistent database-backed conversation memory is intentionally not implemented.
 - Document deletion, re-indexing controls, and full Knowledge Base management are not implemented.
 
 See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
 `docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
-`docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`, and
-`docs/citations-and-language.md`, `docs/streamlit-interface.md`, and `docs/demo-workflow.md` for the
-current behavior and limitations.
+`docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`,
+`docs/citations-and-language.md`, `docs/streamlit-interface.md`, `docs/demo-workflow.md`, and
+`docs/phase-7-1-stabilization.md` for the current behavior and limitations.
 
 ## Privacy
 
@@ -123,8 +127,8 @@ User documents must not be committed to Git.
 Local models can still make mistakes. Users should verify high-stakes answers against the cited
 source documents.
 
-The interface is English in Phase 7. Answers continue to follow the language of each independent
-question; no persistent or history-aware chat is used.
+The interface supports English and Turkish in Phase 7.1. Answers follow the selected UI language
+when configured, otherwise the question language. Chat history is session-only.
 
 ## License
 
