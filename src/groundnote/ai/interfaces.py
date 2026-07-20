@@ -8,7 +8,14 @@ from typing import Protocol
 import numpy as np
 import numpy.typing as npt
 
-from groundnote.ai.models import ChatMessage, ChatResult, EmbeddingBatchResult, ModelInfo
+from groundnote.ai.models import (
+    ChatGenerationRequest,
+    ChatGenerationResult,
+    ChatMessage,
+    ChatResult,
+    EmbeddingBatchResult,
+    ModelInfo,
+)
 
 Float32Vector = npt.NDArray[np.float32]
 Float32Matrix = npt.NDArray[np.float32]
@@ -27,6 +34,9 @@ class ChatProvider(Protocol):
 
     def generate(self, messages: Sequence[ChatMessage], *, max_tokens: int = 64) -> ChatResult:
         """Generate one non-streaming text response."""
+
+    def generate_request(self, request: ChatGenerationRequest) -> ChatGenerationResult:
+        """Generate one non-streaming response from separated system and user prompts."""
 
     def stream(self, messages: Sequence[ChatMessage], *, max_tokens: int = 64) -> Iterable[str]:
         """Stream a text response when supported by the backend."""

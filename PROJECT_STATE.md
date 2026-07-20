@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 5: Embedding, Indexing, and Semantic Retrieval.
+Phase 6: RAG Generation, Prompt Safety, Citations, and Language Handling.
 
 ## Completed Tasks
 
@@ -86,6 +86,23 @@ Phase 5: Embedding, Indexing, and Semantic Retrieval.
 - Fixed Foundry Local manager reuse for the installed preview SDK singleton behavior.
 - Added embedding/indexing and semantic retrieval documentation.
 
+### Phase 6
+
+- Added a dedicated `groundnote.rag` package for single-turn grounded answer generation.
+- Added typed RAG settings for retrieval limits, context limits, generation limits, prompt version,
+  citation requirements, and maximum query length.
+- Connected semantic retrieval to local Foundry chat generation through provider interfaces.
+- Added bounded context selection with stable citation IDs such as `S1`, `S2`, and `S3`.
+- Added prompt-injection defenses with separated system/user prompts and explicitly delimited
+  untrusted retrieved context.
+- Added citation formatting and validation based only on trusted retrieval metadata.
+- Added deterministic insufficient-evidence responses in Turkish and English.
+- Added Turkish and English response-language handling with explicit override support.
+- Added a loopback-only local Foundry daemon fallback for chat model loading when direct preview SDK
+  loading fails.
+- Added RAG unit, integration, privacy, prompt-safety, citation, and fake-provider pipeline tests.
+- Added RAG generation, prompt-safety, and citations/language documentation.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -140,20 +157,52 @@ Phase 5: Embedding, Indexing, and Semantic Retrieval.
 - Real end-to-end ingestion, indexing, and retrieval smoke test.
 - Headless Streamlit startup smoke test.
 
+## Commands Run In Phase 6
+
+- `git status`
+- `git status -sb`
+- `git branch --show-current`
+- `git remote -v`
+- `git log -6 --oneline`
+- `git log origin/main..HEAD --oneline`
+- `git diff origin/main..HEAD --stat`
+- `git ls-files`
+- `foundry server status`
+- `foundry server start`
+- `foundry status`
+- `foundry model download qwen2.5-0.5b-instruct-generic-cpu:4`
+- `foundry model download Phi-3.5-mini-instruct-generic-cpu:2`
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase6-full1`
+- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase6-cov1`
+- `uv run python scripts/check_foundry.py`
+- Targeted RAG unit and integration tests.
+- Real Foundry chat smoke test.
+- Real local end-to-end RAG smoke test.
+- Headless Streamlit startup smoke test.
+
 ## Test Status
 
 - `uv sync`: Passed.
 - `uv run ruff check .`: Passed.
 - `uv run ruff format --check .`: Passed.
 - `uv run mypy src`: Passed.
-- `uv run pytest -m "not foundry"`: Passed, 103 tests passed.
-- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 103 tests passed, 83%
+- `uv run pytest -m "not foundry"`: Passed, 134 tests passed.
+- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 134 tests passed, 83%
   total coverage.
 - Streamlit startup smoke test: Passed.
 - Phase 4 targeted chunking and ingestion tests: Passed, 16 tests passed.
 - Phase 5 targeted embedding, indexing, and retrieval tests: Passed, 13 tests passed.
 - Real Foundry embedding smoke test: Passed, 3 vectors, 1024 dimensions, finite float32 values.
 - Real end-to-end indexing and retrieval smoke test: Passed.
+- Phase 6 targeted RAG tests: Passed, 33 targeted unit and integration tests passed.
+- Real Foundry chat smoke test: Passed with `phi-3.5-mini`, English and Turkish responses, valid
+  `[S1]` citations, and `0` loaded models afterward.
+- Real local end-to-end RAG smoke test: Passed with real local embeddings, real local chat,
+  citation metadata, and insufficient-evidence behavior.
 
 ## Model Benchmark Status
 
@@ -179,6 +228,11 @@ Phase 5: Embedding, Indexing, and Semantic Retrieval.
   cached models and initial load failed with a missing model path.
 - After Phase 5 smoke tests, Foundry status reported service `Ready`, local service `Reachable`,
   `1` cached model, and `0` loaded models.
+- Phase 6 started with Foundry server `Not running`; `foundry server start` was used and the server
+  became `Ready`.
+- `phi-3.5-mini` was downloaded for the Phase 6 real chat smoke because it was not cached at the
+  start of real chat testing. `qwen2.5-0.5b` was also downloaded and tested as a low-resource
+  fallback, but the final successful smoke used the preferred `phi-3.5-mini` model.
 
 ## Pre-Phase 6 Audit Notes
 
@@ -200,4 +254,4 @@ Phase 5: Embedding, Indexing, and Semantic Retrieval.
 
 ## Next Phase
 
-Phase 6: RAG Generation, Prompt Safety, Citations, and Language Handling.
+Phase 7: Streamlit Upload, Indexing, and Chat Interface.

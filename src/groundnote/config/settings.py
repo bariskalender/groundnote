@@ -103,6 +103,17 @@ class Settings(BaseSettings):
     maximum_output_tokens: int = 512
     temperature: float = 0.2
 
+    rag_retrieval_top_k: int = 5
+    rag_minimum_score: float = 0.20
+    rag_max_context_characters: int = 8000
+    rag_max_chunk_count: int = 5
+    rag_temperature: float = 0.1
+    rag_max_output_tokens: int = 700
+    rag_prompt_version: str = "grounded-rag-v1"
+    rag_require_citations: bool = True
+    rag_insufficient_evidence_mode: str = "explicit"
+    rag_max_query_characters: int = 4000
+
     @model_validator(mode="after")
     def fill_default_paths(self) -> Settings:
         base = self.data_directory or user_data_path(self.app_name, appauthor=False)
@@ -209,6 +220,53 @@ class Settings(BaseSettings):
             raise ValueError("temperature must be between 0.0 and 2.0.")
         return value
 
+    @field_validator("chat_model", "fallback_chat_model", "rag_prompt_version")
+    @classmethod
+    def chat_text_settings_must_not_be_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("chat and RAG text settings must not be empty.")
+        return value
+
+    @field_validator("rag_retrieval_top_k")
+    @classmethod
+    def rag_top_k_must_be_small(cls, value: int) -> int:
+        if not 1 <= value <= 20:
+            raise ValueError("rag_retrieval_top_k must be between 1 and 20.")
+        return value
+
+    @field_validator("rag_minimum_score")
+    @classmethod
+    def rag_minimum_score_must_be_cosine_range(cls, value: float) -> float:
+        if not -1.0 <= value <= 1.0:
+            raise ValueError("rag_minimum_score must be between -1.0 and 1.0.")
+        return value
+
+    @field_validator(
+        "rag_max_context_characters",
+        "rag_max_chunk_count",
+        "rag_max_output_tokens",
+        "rag_max_query_characters",
+    )
+    @classmethod
+    def rag_positive_integer_settings(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("RAG integer settings must be positive.")
+        return value
+
+    @field_validator("rag_temperature")
+    @classmethod
+    def rag_temperature_must_be_valid(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("rag_temperature must be between 0.0 and 1.0.")
+        return value
+
+    @field_validator("rag_insufficient_evidence_mode")
+    @classmethod
+    def rag_insufficient_evidence_mode_must_be_supported(cls, value: str) -> str:
+        if value != "explicit":
+            raise ValueError("Only explicit insufficient-evidence mode is supported.")
+        return value
+
     @model_validator(mode="after")
     def validate_related_values(self) -> Settings:
         if self.chunk_maximum_characters < self.chunk_target_characters:
@@ -219,6 +277,14 @@ class Settings(BaseSettings):
             raise ValueError("chunk_minimum_characters must be less than or equal to target.")
         if self.retrieval_candidate_limit < self.top_k:
             raise ValueError("retrieval_candidate_limit must be greater than or equal to top_k.")
+        if self.retrieval_candidate_limit < self.rag_retrieval_top_k:
+            raise ValueError(
+                "retrieval_candidate_limit must be greater than or equal to rag_retrieval_top_k."
+            )
+        if self.retrieval_candidate_limit < self.rag_max_chunk_count:
+            raise ValueError(
+                "retrieval_candidate_limit must be greater than or equal to rag_max_chunk_count."
+            )
         if self.database_path is None:
             raise ValueError("database_path could not be resolved.")
         if self.database_path.suffix.lower() not in SUPPORTED_SQLITE_SUFFIXES:

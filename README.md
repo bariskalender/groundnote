@@ -33,6 +33,7 @@ RAG workflow is not complete yet.
 - Secure document validation and text extraction for PDF, DOCX, TXT, and Markdown.
 - Deterministic hybrid recursive chunking and pre-embedding ingestion.
 - Local embedding indexing and semantic retrieval.
+- Grounded single-turn RAG answer generation with citations.
 - Unit tests.
 - Ruff and mypy checks.
 
@@ -97,21 +98,28 @@ uv run pytest -m "not foundry"
 - Phase 3 completed.
 - Phase 4 completed.
 - Phase 5 completed locally.
+- Phase 6 completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
 - Semantic retrieval returns ranked chunks with citation metadata.
-- RAG answer generation is not implemented yet.
+- Grounded single-turn RAG answer generation is implemented with citation validation.
+- The final Streamlit chat/upload interface is not implemented yet.
+- Persistent conversation memory is not implemented yet.
 
 See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
 `docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
-`docs/semantic-retrieval.md` for the current behavior and limitations.
+`docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`, and
+`docs/citations-and-language.md` for the current behavior and limitations.
 
 ## Privacy
 
 No cloud AI API is currently used. Model inference runs through Microsoft Foundry Local.
 First-time model downloads require internet, while cached inference is intended to work locally.
 User documents must not be committed to Git.
+
+Local models can still make mistakes. Users should verify high-stakes answers against the cited
+source documents.
 
 ## License
 

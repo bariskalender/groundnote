@@ -8,15 +8,29 @@ from typing import cast
 import numpy as np
 
 from groundnote.ai.interfaces import Float32Vector
-from groundnote.ai.models import ChatMessage, ChatResult, EmbeddingBatchResult, ModelInfo
+from groundnote.ai.models import (
+    ChatGenerationRequest,
+    ChatGenerationResult,
+    ChatMessage,
+    ChatResult,
+    EmbeddingBatchResult,
+    ModelInfo,
+)
 
 
 class FakeChatProvider:
     """Deterministic chat provider that does not require Foundry Local."""
 
-    def __init__(self, model_alias: str = "fake-chat") -> None:
+    def __init__(
+        self,
+        model_alias: str = "fake-chat",
+        responses: Sequence[str] | None = None,
+    ) -> None:
         self.model_alias = model_alias
         self.loaded = False
+        self.calls = 0
+        self.requests: list[ChatGenerationRequest] = []
+        self.responses = list(responses or [])
 
     def ensure_model_available(self, *, download: bool = False) -> ModelInfo:
         return ModelInfo(
@@ -44,6 +58,18 @@ class FakeChatProvider:
         return ChatResult(
             text=f"fake response: {last_user[:max_tokens]}",
             model_alias=self.model_alias,
+        )
+
+    def generate_request(self, request: ChatGenerationRequest) -> ChatGenerationResult:
+        if not self.loaded:
+            raise RuntimeError("Fake chat provider is not loaded.")
+        self.calls += 1
+        self.requests.append(request)
+        text = self.responses.pop(0) if self.responses else "Fake grounded answer. [S1]"
+        return ChatGenerationResult(
+            text=text,
+            model=request.model,
+            duration_ms=1.0,
         )
 
     def stream(self, messages: Sequence[ChatMessage], *, max_tokens: int = 64) -> Iterable[str]:

@@ -1,7 +1,7 @@
 # Semantic Retrieval
 
 Phase 5 adds local semantic retrieval over indexed chunk embeddings. It returns ranked source
-chunks and citation metadata. It does not generate final RAG answers.
+chunks and citation metadata. Phase 6 uses these results for grounded RAG answers.
 
 ## Query Embedding
 
@@ -65,7 +65,7 @@ Each retrieval result includes:
 - source ordering metadata;
 - safe chunk metadata.
 
-This metadata is intended for future citations and RAG context assembly.
+This metadata is used by the Phase 6 RAG service for citations and context assembly.
 
 ## Privacy
 
@@ -76,5 +76,5 @@ or absolute local file paths.
 ## Current Limitations
 
 - Semantic retrieval does not guarantee perfect relevance.
-- No answer generation or citation sentence formatting is implemented yet.
+- Answer generation is implemented in the separate Phase 6 RAG service, not in retrieval.
 - No Streamlit search or chat UI is implemented yet.

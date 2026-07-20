@@ -8,7 +8,7 @@
 | 3 | Secure document validation and parsing | Complete |
 | 4 | Hybrid Recursive Chunking and Pre-Embedding Ingestion | Complete |
 | 5 | Embedding, Indexing, and Semantic Retrieval | Complete |
-| 6 | Foundry Local chat provider and RAG answer generation | Not started |
+| 6 | Foundry Local chat provider and RAG answer generation | Complete |
 | 7 | Streamlit study workflow UI | Not started |
 | 8 | Polishing, documentation, packaging notes, and final QA | Not started |
 
@@ -80,3 +80,17 @@
 - Returned ranked chunks with filename, file type, page, section, source order, score, and metadata.
 - No chat model calls, RAG answer generation, final upload/chat UI, external vector database, or
   cloud API were implemented.
+
+## Phase 6 Acceptance Notes
+
+- Added grounded single-turn RAG answer generation using retrieved chunks and Foundry Local chat.
+- Added RAG query validation, Turkish/English response-language handling, bounded context assembly,
+  citation IDs, citation validation, and deterministic insufficient-evidence responses.
+- Added prompt-injection defenses that keep retrieved document text out of system instructions and
+  treat source content as untrusted evidence.
+- Added local-only chat provider fallback through the loopback Foundry daemon for preview SDK
+  runtime issues.
+- Added RAG unit, integration, privacy, citation, prompt-safety, and fake-provider pipeline tests.
+- Added RAG generation, prompt-safety, and citations/language documentation.
+- No final Streamlit chat UI, persistent conversation memory, cloud API, external vector database,
+  or Phase 7 work was implemented.

@@ -28,6 +28,30 @@ class ChatResult:
 
 
 @dataclass(frozen=True)
+class ChatGenerationRequest:
+    """Provider-neutral chat generation request."""
+
+    system_prompt: str = field(repr=False)
+    user_prompt: str = field(repr=False)
+    temperature: float
+    max_output_tokens: int
+    model: str
+
+
+@dataclass(frozen=True)
+class ChatGenerationResult:
+    """Provider-neutral chat generation result."""
+
+    text: str = field(repr=False)
+    model: str
+    duration_ms: float
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    finish_reason: str | None = None
+    warnings: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ModelInfo:
     """Small model summary that avoids leaking SDK objects outside the AI layer."""
 

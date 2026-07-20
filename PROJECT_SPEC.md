@@ -91,6 +91,8 @@ Implemented foundation so far:
 - Deterministic hybrid recursive chunking and transaction-safe pre-embedding ingestion.
 - Local Foundry embedding generation, normalized SQLite vector persistence, and NumPy semantic
   retrieval.
+- Grounded single-turn RAG generation with prompt-injection defenses, citation validation, and
+  Turkish/English response-language handling.
 
 ## Non-MVP Features
 

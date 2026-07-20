@@ -1,7 +1,8 @@
 # Supported Documents
 
-GroundNote Phase 3 supports safe validation and text extraction for small to medium local study
-documents. Full ingestion, chunking, embeddings, retrieval, and RAG answers are later phases.
+GroundNote supports safe validation and text extraction for small to medium local study documents.
+Ingestion, chunking, embeddings, retrieval, and grounded RAG answers live in later architecture
+layers.
 
 ## Supported Extensions
 

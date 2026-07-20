@@ -62,6 +62,6 @@ transaction so partial persistent state is not exposed.
 
 - No embeddings are generated.
 - No semantic retrieval path is implemented.
-- No RAG answer generation is implemented.
+- No RAG answer generation is implemented in the pre-embedding ingestion layer.
 - The final Streamlit upload and chat workflow is not implemented.
 - Foundry Local is not initialized or called by Phase 4 ingestion.

@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import numpy as np
 
-from groundnote.ai.models import ChatMessage, ChatResult, EmbeddingBatchResult
+from groundnote.ai.models import (
+    ChatGenerationRequest,
+    ChatGenerationResult,
+    ChatMessage,
+    ChatResult,
+    EmbeddingBatchResult,
+)
 from groundnote.domain import DocumentChunk, SupportedFileType
 from groundnote.domain.retrieval import RetrievalResult as DomainRetrievalResult
 from groundnote.embeddings.models import EmbeddingVector
@@ -16,6 +22,14 @@ def test_private_text_and_vectors_are_not_exposed_in_model_reprs() -> None:
     objects = [
         ChatMessage(role="user", content=secret_text),
         ChatResult(text=secret_text, model_alias="fake"),
+        ChatGenerationRequest(
+            system_prompt=secret_text,
+            user_prompt=secret_text,
+            temperature=0.1,
+            max_output_tokens=10,
+            model="fake",
+        ),
+        ChatGenerationResult(text=secret_text, model="fake", duration_ms=1.0),
         EmbeddingBatchResult(vectors=np.vstack([vector]), model_alias="fake", dimension=2),
         DocumentChunk(
             id="chunk-1",

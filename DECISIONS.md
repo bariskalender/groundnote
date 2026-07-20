@@ -193,3 +193,24 @@ as cached but failed direct SDK loading with a missing model path for the select
 GroundNote keeps the SDK provider boundary, but the embedding provider may fall back to the
 OpenAI-compatible Foundry Local daemon on `127.0.0.1` for the same local model variant. This is not
 a cloud fallback, does not initialize chat generation, and unloads the embedding model after use.
+
+## ADR-0022: Keep RAG Generation Single-Turn And Citation-Gated
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Phase 6 adds answer generation as a single-turn service instead of persistent conversation memory.
+Grounded answers require retrieved context and at least one valid citation ID mapped from trusted
+retrieval metadata. If no context exists, GroundNote returns a deterministic insufficient-evidence
+message without loading the chat model. If a generated answer lacks citations, one repair attempt is
+allowed before failing safely.
+
+## ADR-0023: Use Loopback Foundry Daemon Fallback For Chat Preview Issues
+
+- Status: Accepted
+- Date: 2026-07-20
+
+The chat provider first uses the Foundry Local SDK. If the installed preview runtime cannot load
+the selected local model directly, the provider may load the same model variant through the local
+Foundry daemon and call its OpenAI-compatible endpoint on loopback only. This is local inference,
+does not permit arbitrary remote URLs, and does not add a cloud fallback.

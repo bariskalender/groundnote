@@ -61,5 +61,5 @@ full document text, extracted sections, raw bytes, absolute paths, or full hashe
 - No chunking.
 - No embedding generation.
 - No semantic retrieval.
-- No RAG answer generation.
+- No RAG answer generation in the document-processing layer.
 - No final upload or chat UI.

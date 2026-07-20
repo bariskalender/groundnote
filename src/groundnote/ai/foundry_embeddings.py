@@ -160,6 +160,8 @@ class FoundryEmbeddingProvider:
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout_seconds,
         )
         if check and completed.returncode != 0:
