@@ -214,3 +214,19 @@ The chat provider first uses the Foundry Local SDK. If the installed preview run
 the selected local model directly, the provider may load the same model variant through the local
 Foundry daemon and call its OpenAI-compatible endpoint on loopback only. This is local inference,
 does not permit arbitrary remote URLs, and does not add a cloud fallback.
+
+## ADR-0024: Keep Local Model Inference Outside SQLite Write Transactions
+
+- Status: Accepted
+- Date: 2026-07-20
+
+The Pre-Phase 7 UI readiness audit found that document indexing held a SQLite write transaction
+open while the local embedding model loaded and generated vectors. That was safe for atomic
+visibility but unnecessarily risky for a Streamlit UI, where reruns and status polling may happen
+while indexing is in progress.
+
+GroundNote now uses short transactions around database state changes and performs embedding model
+loading/generation outside those write transactions. A document becomes `INDEXING` before model
+work starts, remains non-searchable until all embeddings are saved and the document is marked
+`INDEXED`, and becomes `FAILED` with a safe message if embedding generation fails. Retrieval still
+loads only `INDEXED` documents with compatible embedding model/version metadata.

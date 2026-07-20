@@ -41,43 +41,33 @@ class DocumentIndexingService:
         self.logger = get_logger(__name__)
 
     def index_document(self, document_id: str, *, force_reindex: bool = False) -> IndexingResult:
-        """Index one document transactionally."""
+        """Index one document without holding a SQLite transaction during model inference."""
         started = time.perf_counter()
+        chunks = self._prepare_for_indexing(document_id, force_reindex=force_reindex)
+
+        self.embedding_service.load()
+        try:
+            serialized = self._embed_chunks(chunks)
+        except Exception as exc:
+            self._mark_failed(document_id, "Embedding generation failed during indexing.")
+            raise exc
+        finally:
+            self.embedding_service.unload()
+
+        embedded_at = datetime.now(UTC)
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Unit of Work repositories are unavailable.")
             document = unit_of_work.documents.get_by_id(document_id)
-            self._validate_status(document, force_reindex=force_reindex)
-            chunks = unit_of_work.vectors.list_for_document(document_id)
-            if not chunks:
-                raise IndexingError("Document has no chunks to index.")
-            if force_reindex:
-                unit_of_work.vectors.clear_embeddings_for_document(document_id)
-            elif unit_of_work.vectors.count_embedded_chunks_for_document(document_id) > 0:
-                raise IndexingError("Document already has partial embeddings.")
-
-            indexing_document = document.model_copy(
-                update={
-                    "status": DocumentStatus.INDEXING,
-                    "updated_at": datetime.now(UTC),
-                    "error_message": None,
-                }
-            )
-            unit_of_work.documents.update(indexing_document)
-
-            self.embedding_service.load()
-            try:
-                serialized = self._embed_chunks(chunks)
-            finally:
-                self.embedding_service.unload()
-            embedded_at = datetime.now(UTC)
+            if document.status != DocumentStatus.INDEXING:
+                raise DocumentNotReadyForIndexingError("Document is no longer being indexed.")
             unit_of_work.vectors.save_chunk_embeddings(
                 [(chunk_id, embedding) for chunk_id, embedding in serialized],
                 embedding_model=self.settings.embedding_model,
                 embedding_version=self.settings.embedding_version,
                 embedded_at=embedded_at,
             )
-            indexed_document = indexing_document.model_copy(
+            indexed_document = document.model_copy(
                 update={
                     "status": DocumentStatus.INDEXED,
                     "updated_at": embedded_at,
@@ -117,6 +107,53 @@ class DocumentIndexingService:
             warnings=[],
             duration_ms=duration_ms,
         )
+
+    def _prepare_for_indexing(
+        self,
+        document_id: str,
+        *,
+        force_reindex: bool,
+    ) -> list[DocumentChunk]:
+        with self.unit_of_work_factory() as unit_of_work:
+            if unit_of_work.documents is None or unit_of_work.vectors is None:
+                raise RuntimeError("Unit of Work repositories are unavailable.")
+            document = unit_of_work.documents.get_by_id(document_id)
+            self._validate_status(document, force_reindex=force_reindex)
+            chunks = unit_of_work.vectors.list_for_document(document_id)
+            if not chunks:
+                raise IndexingError("Document has no chunks to index.")
+            if force_reindex:
+                unit_of_work.vectors.clear_embeddings_for_document(document_id)
+            elif unit_of_work.vectors.count_embedded_chunks_for_document(document_id) > 0:
+                raise IndexingError("Document already has partial embeddings.")
+
+            unit_of_work.documents.update(
+                document.model_copy(
+                    update={
+                        "status": DocumentStatus.INDEXING,
+                        "updated_at": datetime.now(UTC),
+                        "error_message": None,
+                    }
+                )
+            )
+            unit_of_work.commit()
+            return chunks
+
+    def _mark_failed(self, document_id: str, safe_message: str) -> None:
+        with self.unit_of_work_factory() as unit_of_work:
+            if unit_of_work.documents is None:
+                raise RuntimeError("Unit of Work document repository is unavailable.")
+            document = unit_of_work.documents.get_by_id(document_id)
+            unit_of_work.documents.update(
+                document.model_copy(
+                    update={
+                        "status": DocumentStatus.FAILED,
+                        "updated_at": datetime.now(UTC),
+                        "error_message": safe_message,
+                    }
+                )
+            )
+            unit_of_work.commit()
 
     def clear_embeddings(self, document_id: str) -> None:
         """Clear embeddings for one document and return it to PENDING_EMBEDDING."""

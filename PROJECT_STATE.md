@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 6: RAG Generation, Prompt Safety, Citations, and Language Handling.
+Pre-Phase 7 UI readiness audit complete. Phase 7 has not started.
 
 ## Completed Tasks
 
@@ -103,6 +103,19 @@ Phase 6: RAG Generation, Prompt Safety, Citations, and Language Handling.
 - Added RAG unit, integration, privacy, prompt-safety, citation, and fake-provider pipeline tests.
 - Added RAG generation, prompt-safety, and citations/language documentation.
 
+### Pre-Phase 7 UI Readiness Audit
+
+- Audited application composition, Streamlit rerun readiness, service boundaries, error behavior,
+  upload lifecycle, document processing, indexing, retrieval, RAG generation, citations, privacy,
+  logging, SQLite concurrency, settings, dependencies, and security posture.
+- Added `docs/audits/pre-phase-7-ui-readiness-audit.md`.
+- Fixed indexing transaction duration so local embedding model loading and generation run outside
+  SQLite write transactions.
+- Added a regression test proving a separate SQLite write can complete while fake embedding
+  generation is running.
+- Updated indexing documentation to describe the short-transaction strategy and `FAILED` indexing
+  behavior.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -184,15 +197,48 @@ Phase 6: RAG Generation, Prompt Safety, Citations, and Language Handling.
 - Real local end-to-end RAG smoke test.
 - Headless Streamlit startup smoke test.
 
+## Commands Run In Pre-Phase 7 UI Readiness Audit
+
+- `git status`
+- `git status -sb`
+- `git branch --show-current`
+- `git remote -v`
+- `git log -8 --oneline`
+- `git fetch origin`
+- `git log HEAD..origin/main --oneline`
+- `git log origin/main..HEAD --oneline`
+- `git ls-files`
+- Security and privacy source searches with `rg`.
+- `uv run pytest tests/integration/indexing/test_indexing_and_retrieval.py -q --basetemp .local-data/pytest-prephase7-indexing`
+- Fake-provider UI-backend pipeline timing smoke test.
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-prephase7-full`
+- `uv run python scripts/check_foundry.py`
+- Real local end-to-end RAG smoke test with cached Foundry Local embedding and chat models.
+- `foundry status`
+- Final `uv run ruff check .`, `uv run mypy src`, and
+  `uv run pytest -m "not foundry" --basetemp .local-data/pytest-prephase7-final`
+
 ## Test Status
 
+- Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
+- Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
 - `uv sync`: Passed.
 - `uv run ruff check .`: Passed.
-- `uv run ruff format --check .`: Passed.
-- `uv run mypy src`: Passed.
-- `uv run pytest -m "not foundry"`: Passed, 134 tests passed.
-- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed, 134 tests passed, 83%
-  total coverage.
+- `uv run ruff format --check .`: Passed, 121 files already formatted.
+- `uv run mypy src`: Passed, no issues in 76 source files.
+- `uv run pytest -m "not foundry"`: Passed, 135 tests passed.
+- `uv run python scripts/check_foundry.py`: Passed; Foundry CLI `0.10.2`, server `Ready`, 4 cached
+  models, 0 loaded models at check time.
+- Pre-Phase 7 real local end-to-end RAG smoke test: Passed with cached `qwen3-embedding-0.6b` and
+  `phi-3.5-mini`, 1 indexed chunk, grounded answer, and 1 citation.
+- Post-smoke `foundry status`: Passed; service `Ready`, local service `Reachable`, 4 cached models,
+  and 0 loaded models.
+- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed in Phase 6, 134 tests passed,
+  83% total coverage.
 - Streamlit startup smoke test: Passed.
 - Phase 4 targeted chunking and ingestion tests: Passed, 16 tests passed.
 - Phase 5 targeted embedding, indexing, and retrieval tests: Passed, 13 tests passed.

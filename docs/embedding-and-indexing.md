@@ -57,9 +57,15 @@ rejected unless `force_reindex=True` is requested.
 
 ## Transaction And Failure Behavior
 
-Document status changes and chunk embedding writes occur inside one Unit of Work transaction. If
-embedding generation or persistence fails, the transaction rolls back and the document remains
-non-searchable. Retrieval only considers documents with `INDEXED` status.
+Indexing uses short SQLite transactions around database state changes, but it does not hold a write
+transaction open while the local embedding model is loading or generating vectors. The document is
+first moved to `INDEXING` and old embeddings are cleared only when explicit force re-indexing is
+requested. Embedding generation then runs outside the database transaction. Finally, all chunk
+embeddings and the `INDEXED` document status are saved in one short transaction.
+
+If embedding generation fails, the document is marked `FAILED` with a safe error message and
+remains non-searchable. Retrieval only considers documents with `INDEXED` status, so partial or
+failed indexing cannot leak into search results.
 
 Force re-indexing clears old embeddings transactionally, regenerates all embeddings, preserves
 document and chunk identities, and does not duplicate chunks.

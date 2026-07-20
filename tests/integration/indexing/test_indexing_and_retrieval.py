@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -64,6 +65,25 @@ class KeywordEmbeddingProvider:
         else:
             vector[3] = 1.0
         return vector
+
+
+class DatabaseWriteDuringEmbeddingProvider(KeywordEmbeddingProvider):
+    def __init__(self, database_path: Path, *, dimension: int = 1024) -> None:
+        super().__init__(dimension=dimension)
+        self.database_path = database_path
+        self.write_succeeded = False
+
+    def embed_many(self, texts: Sequence[str], *, batch_size: int = 8) -> object:
+        with sqlite3.connect(self.database_path, timeout=1.0) as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO application_metadata (key, value, updated_at)
+                VALUES ('indexing_lock_probe', 'ok', '2026-07-20T00:00:00+00:00')
+                """
+            )
+            connection.commit()
+        self.write_succeeded = True
+        return super().embed_many(texts, batch_size=batch_size)
 
 
 @pytest.fixture
@@ -171,7 +191,8 @@ def test_indexing_failure_rolls_back_and_document_is_not_searchable(
 
     with SQLiteConnectionFactory(initialized_database).open() as connection:
         document = SQLiteDocumentRepository(connection).get_by_id(document_id)
-        assert document.status == DocumentStatus.PENDING_EMBEDDING
+        assert document.status == DocumentStatus.FAILED
+        assert document.error_message == "Embedding generation failed during indexing."
         embedded_count = SQLiteVectorRepository(connection).count_embedded_chunks_for_document(
             document_id
         )
@@ -201,6 +222,30 @@ def test_already_indexed_rejected_and_force_reindex_preserves_chunks(
     after = _chunk_count(initialized_database, document_id)
 
     assert before == after
+
+
+def test_indexing_does_not_hold_write_transaction_during_embedding(
+    tmp_path: Path,
+    initialized_database: Path,
+) -> None:
+    document_id, _, settings = _ingest_text(
+        tmp_path,
+        initialized_database,
+        "Database index text for lock probing.",
+    )
+    provider = DatabaseWriteDuringEmbeddingProvider(initialized_database)
+    indexer = DocumentIndexingService(
+        settings=settings,
+        unit_of_work_factory=SQLiteUnitOfWorkFactory(initialized_database),
+        embedding_service=EmbeddingService(settings=settings, provider=provider),
+    )
+
+    indexer.index_document(document_id)
+
+    assert provider.write_succeeded is True
+    with SQLiteConnectionFactory(initialized_database).open() as connection:
+        document = SQLiteDocumentRepository(connection).get_by_id(document_id)
+        assert document.status == DocumentStatus.INDEXED
 
 
 def test_retrieval_filters_and_exclusions(tmp_path: Path, initialized_database: Path) -> None:

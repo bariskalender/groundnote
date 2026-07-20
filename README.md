@@ -9,8 +9,9 @@ help students study from lecture notes, course documents, and personal study mat
 sending those files to a cloud AI service.
 
 In the planned application, users will upload PDF, DOCX, TXT, and Markdown files, then ask
-questions about the contents of those documents. GroundNote is still under development. The final
-RAG workflow is not complete yet.
+questions about the contents of those documents. GroundNote is still under development. The backend
+RAG pipeline is implemented, but the final Streamlit upload, indexing, Knowledge Base, and chat
+interface is not implemented yet.
 
 ## Why GroundNote?
 
@@ -59,7 +60,7 @@ hardware.
 ## Planned Features
 
 - Drag-and-drop document upload.
-- Persistent pre-embedding document ingestion workflow.
+- Streamlit upload and indexing workflow.
 - Local SQLite knowledge base.
 - RAG answer generation using retrieved context.
 - Source filename and page number display.
@@ -99,6 +100,7 @@ uv run pytest -m "not foundry"
 - Phase 4 completed.
 - Phase 5 completed locally.
 - Phase 6 completed locally.
+- Pre-Phase 7 UI readiness audit completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.

@@ -9,6 +9,7 @@
 | 4 | Hybrid Recursive Chunking and Pre-Embedding Ingestion | Complete |
 | 5 | Embedding, Indexing, and Semantic Retrieval | Complete |
 | 6 | Foundry Local chat provider and RAG answer generation | Complete |
+| Audit | Pre-Phase 7 UI readiness audit | Complete |
 | 7 | Streamlit study workflow UI | Not started |
 | 8 | Polishing, documentation, packaging notes, and final QA | Not started |
 
@@ -94,3 +95,16 @@
 - Added RAG generation, prompt-safety, and citations/language documentation.
 - No final Streamlit chat UI, persistent conversation memory, cloud API, external vector database,
   or Phase 7 work was implemented.
+
+## Pre-Phase 7 UI Readiness Audit Notes
+
+- Verified the Phases 0-6 backend foundation before Streamlit upload, indexing, Knowledge Base,
+  and chat UI work.
+- Fixed indexing transaction duration so local embedding model loading and generation no longer
+  hold a SQLite write transaction open.
+- Confirmed startup remains lightweight and does not load chat or embedding models.
+- Confirmed uploaded-file helpers, document validation, duplicate detection, parsing, chunking,
+  indexing, retrieval, RAG generation, citations, privacy protections, and logging are ready for a
+  Phase 7 UI adapter.
+- Added `docs/audits/pre-phase-7-ui-readiness-audit.md`.
+- Phase 7 remains not started.
