@@ -22,7 +22,7 @@ from groundnote.storage import (
     SQLiteVectorRepository,
 )
 from groundnote.storage.exceptions import InvalidEmbeddingError as StorageInvalidEmbeddingError
-from groundnote.utils import get_logger, sanitize_log_fields
+from groundnote.utils import get_logger, safe_log_info, safe_log_warning, sanitize_log_fields
 
 
 class SemanticRetrievalService:
@@ -66,9 +66,12 @@ class SemanticRetrievalService:
         """Search with a prevalidated query."""
         started = time.perf_counter()
         embedding_started = time.perf_counter()
-        self.embedding_service.load()
         try:
+            self.embedding_service.load()
             query_vector = self.embedding_service.embed_query(query.text)
+        except Exception:
+            self._unload_embedding_model()
+            raise
         finally:
             if not self.settings.keep_models_loaded:
                 self._unload_embedding_model()
@@ -141,7 +144,8 @@ class SemanticRetrievalService:
             warnings.append(expansion_warning)
         if lexical_matches:
             warnings.append("hybrid_retrieval_used")
-        self.logger.info(
+        safe_log_info(
+            self.logger,
             "semantic_retrieval_completed",
             **sanitize_log_fields(
                 {
@@ -176,7 +180,8 @@ class SemanticRetrievalService:
         try:
             self.embedding_service.unload()
         except Exception:
-            self.logger.warning(
+            safe_log_warning(
+                self.logger,
                 "embedding_model_unload_failed",
                 embedding_model=self.settings.embedding_model,
             )

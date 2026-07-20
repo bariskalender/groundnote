@@ -8,7 +8,7 @@ from groundnote.domain import SupportedFileType
 from groundnote.ui.app_context import ApplicationContext
 from groundnote.ui.components.chat import render_question_input, render_question_outcome
 from groundnote.ui.components.notices import render_message
-from groundnote.ui.errors import map_exception
+from groundnote.ui.errors import safe_failure_message
 from groundnote.ui.formatting import format_file_type, safe_filename
 from groundnote.ui.models import QuestionOutcome
 from groundnote.ui.state import (
@@ -27,8 +27,13 @@ def render_ask_page(context: ApplicationContext) -> None:
     try:
         indexed = context.document_workflow.indexed_documents()
     except Exception as exc:
-        get_logger(__name__).warning("ask_source_refresh_failed", error_type=type(exc).__name__)
-        render_message(map_exception(exc))
+        render_message(
+            safe_failure_message(
+                exc,
+                logger=get_logger(__name__),
+                event="ask_source_refresh_failed",
+            )
+        )
         return
     if not indexed:
         st.info("No indexed documents are ready. Add and index a document in the Documents view.")
@@ -96,8 +101,13 @@ def _answer_question(
             }
             status.update(label="Answer ready", state="complete", expanded=False)
         except Exception as exc:
-            get_logger(__name__).warning("ui_question_failed", error_type=type(exc).__name__)
             status.update(label="Question could not be completed", state="error", expanded=True)
-            render_message(map_exception(exc))
+            render_message(
+                safe_failure_message(
+                    exc,
+                    logger=get_logger(__name__),
+                    event="ui_question_failed",
+                )
+            )
         finally:
             st.session_state[QUESTION_IN_PROGRESS] = False

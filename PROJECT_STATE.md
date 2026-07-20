@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 7.1 complete locally. Phase 8 has not started.
+Phase 7.1.1 complete locally. Phase 8 has not started.
 
 ## Completed Tasks
 
@@ -159,6 +159,27 @@ Phase 7.1 complete locally. Phase 8 has not started.
   recoverable operation state.
 - Added `docs/phase-7-1-stabilization.md`.
 
+### Phase 7.1.1
+
+- Replaced cached stdout-bound Structlog logging with idempotent standard-library integration and
+  best-effort failure-path logging that preserves the original exception.
+- Added a UTF-8 rotating local log handler that closes the file after every record, preventing stale
+  Streamlit streams and Windows file locks.
+- Disabled detailed Streamlit browser exceptions and expanded localized safe error mapping.
+- Removed the manual document-processing button and permanent indexing administration panels.
+- Added automatic sequential upload processing with stable identities, rerun protection, duplicate
+  skipping, per-file failure isolation, and no uploaded bytes in session state.
+- Added compact document statuses and inline retry that safely reuses persisted document and chunk
+  identities when possible.
+- Moved language, performance, answer-language, and model lifecycle controls into an upper-right
+  gear popover.
+- Hardened operation state with IDs, timestamps, terminal status, stale recovery, and `try/finally`
+  cleanup.
+- Added Windows logging, automatic upload, corrupt-file continuation, UI state, and Streamlit
+  AppTest regressions.
+- Updated the Streamlit, indexing, demonstration, stabilization, README, roadmap, state, and
+  decision documentation.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -312,6 +333,25 @@ Phase 7.1 complete locally. Phase 8 has not started.
 - `foundry model unload qwen3-embedding-0.6b-generic-cpu:1`
 - Deterministic greeting workflow timing smoke.
 
+## Commands Run In Phase 7.1.1
+
+- Initial Git branch, cleanliness, remote, synchronization, history, and Phase 8 safety checks.
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- Targeted logging, upload, UI state, workflow, pipeline, and Streamlit AppTest checks.
+- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase711-postreview-final`
+- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase711-coverage-postreview`
+- `uv run python scripts/check_foundry.py`
+- `uv run python scripts/smoke_ui_pipeline.py`
+- `uv run python scripts/smoke_ui_real.py`
+- `uv run streamlit run src/groundnote/app.py --server.headless=true --server.port=8511`
+- Manual in-app Windows browser smoke for automatic DOCX/PDF upload, corrupt-file continuation,
+  inline retry, duplicates, settings reruns, grounded follow-up chat, New chat, and model unloading.
+- `foundry status`
+- Security, privacy, generated-file, and tracked-file searches with `rg` and Git.
+
 ## Test Status
 
 - Phase 7 UI unit/integration/Streamlit target: Passed.
@@ -335,6 +375,17 @@ Phase 7.1 complete locally. Phase 8 has not started.
   performance mode, multiple-file input, bottom chat input, and greeting response.
 - Phase 7.1 deterministic greeting timing smoke: Passed in 0.07 ms with zero model calls and zero
   citations.
+- Phase 7.1.1 targeted logging/upload/UI checks: Passed, 31 tests passed.
+- Phase 7.1.1 `uv run pytest -m "not foundry"`: Passed, 203 tests passed.
+- Phase 7.1.1 coverage: Passed, 203 tests passed, 79% total coverage.
+- Phase 7.1.1 fake-provider UI pipeline: Passed with automatic indexing, trusted citation,
+  duplicate detection, persistence, and insufficient-evidence behavior.
+- Phase 7.1.1 real Foundry UI-backend smoke: Passed with local embeddings, English and Turkish
+  grounded answers, citations, and no loaded models afterward.
+- Phase 7.1.1 manual Windows Streamlit smoke: Passed for automatic sequential DOCX/PDF processing,
+  later-file success after a corrupt PDF, inline retry recovery, duplicate skipping, gear settings,
+  rerun protection, grounded follow-up chat with citation, New chat document preservation, no raw
+  traceback, no logging `OSError`, and zero loaded models afterward.
 - Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
 - Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
 - `uv sync`: Passed.
@@ -392,8 +443,10 @@ Phase 7.1 complete locally. Phase 8 has not started.
   fallback, but the final successful smoke used the preferred `phi-3.5-mini` model.
 - Phase 7.1 model operations remain synchronous. Balanced mode keeps models warm during the session,
   Fast uses the low-resource chat model, and Memory saver unloads after each operation.
-- Phase 7.1 adds a minimal retry-indexing action, but document deletion and full Knowledge Base
-  management remain Phase 8 work.
+- Phase 7.1.1 automatic processing is synchronous and sequential; it is not a background queue.
+  Document deletion and full Knowledge Base management remain Phase 8 work.
+- A parse failure that occurs before persistence can be retried while the browser still supplies the
+  selected upload; after the file is unavailable, the user must select it again.
 - Real Foundry Phase 7.1 smoke timings were measured on a tiny safe fixture:
   - indexing: 5.316 s
   - English grounded answer: 20.919 s

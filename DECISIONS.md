@@ -293,3 +293,27 @@ Phase 7.1 keeps application startup lightweight but allows models to remain load
 in Balanced mode. Fast mode uses the smaller fallback chat model with a lower output limit. Memory
 saver mode and the explicit sidebar unload action release local models when the user prefers lower
 memory usage over latency.
+
+## ADR-0030: Use Streamlit-Safe Standard-Library File Logging
+
+- Status: Accepted
+- Date: 2026-07-20
+
+Phase 7.1.1 removes the cached Structlog `PrintLogger` bound to Streamlit's temporary stdout. It uses
+Structlog's standard-library integration with one idempotently configured UTF-8 local file handler.
+The handler closes the file after every record so reruns do not retain stale console streams or
+Windows file handles. Privacy processors still redact sensitive content. Narrow best-effort logging
+helpers ensure a handler failure cannot mask the original application exception or block operation
+cleanup.
+
+## ADR-0031: Process Selected Uploads Sequentially With Session-Safe Identities
+
+- Status: Accepted
+- Date: 2026-07-20
+
+GroundNote treats file selection as the trigger for automatic local processing. Stable opaque
+upload identities and queued, active, completed, and failed session sets prevent ordinary Streamlit
+reruns and settings changes from repeating work. Files run synchronously and sequentially without a
+background worker, uploaded bytes are not retained in session state, duplicate detection happens
+before model loading, and one file failure does not stop later files. Retry remains an inline action
+on the affected failed document; deletion and full Knowledge Base management stay in Phase 8.

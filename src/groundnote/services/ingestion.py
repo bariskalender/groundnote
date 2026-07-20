@@ -19,7 +19,7 @@ from groundnote.config import Settings
 from groundnote.documents import DocumentProcessingService, DuplicateCheckResult, DuplicateType
 from groundnote.domain import Document, DocumentStatus
 from groundnote.storage import SQLiteUnitOfWork
-from groundnote.utils import get_logger, sanitize_log_fields
+from groundnote.utils import get_logger, safe_log_info, sanitize_log_fields
 
 
 class UnitOfWorkFactory(Protocol):
@@ -141,7 +141,8 @@ class PreEmbeddingIngestionService:
         duration_ms: float,
     ) -> None:
         average_size = round(sum(chunk_sizes) / len(chunk_sizes), 2) if chunk_sizes else 0
-        self.logger.info(
+        safe_log_info(
+            self.logger,
             "document_pre_embedding_ingested",
             **sanitize_log_fields(
                 {

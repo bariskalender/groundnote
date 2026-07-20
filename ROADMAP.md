@@ -12,6 +12,7 @@
 | Audit | Pre-Phase 7 UI readiness audit | Complete |
 | 7 | Streamlit Upload, Indexing, and Chat Interface | Complete |
 | 7.1 | Product Stabilization, Retrieval Reliability, Performance, and Chat UX Rebuild | Complete |
+| 7.1.1 | Automatic Document Processing, Simplified UI, and Windows Error Recovery | Complete |
 | 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Not started |
 
 ## Phase 0 Acceptance Notes
@@ -146,3 +147,17 @@
   recoverable operation state.
 - Added multiple-file upload and minimal retry indexing without implementing Phase 8 Knowledge Base
   management.
+
+## Phase 7.1.1 Acceptance Notes
+
+- Replaced cached stdout-bound Structlog logging with idempotent standard-library integration and a
+  UTF-8 local file handler that does not retain Windows file handles between records.
+- Prevented logging failures from masking original application failures and disabled detailed
+  Streamlit browser exceptions.
+- Removed the manual Process documents action and permanent indexing administration panels.
+- Added automatic local, synchronous, sequential processing after file selection with stable
+  rerun-safe upload identities, duplicate skipping, per-file failure isolation, and byte cleanup.
+- Added a compact document list with safe statuses and inline retry for failed documents.
+- Moved session settings and model unloading behind the upper-right gear popover.
+- Verified multiple uploads, corrupt-file recovery, duplicates, grounded chat, settings reruns, New
+  chat document preservation, and model cleanup on Windows without starting Phase 8.

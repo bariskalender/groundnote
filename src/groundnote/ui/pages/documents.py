@@ -8,7 +8,7 @@ from groundnote.ui.app_context import ApplicationContext
 from groundnote.ui.components.document_status import render_document_status
 from groundnote.ui.components.notices import render_message, render_warnings
 from groundnote.ui.components.upload import render_upload_control, render_upload_outcome
-from groundnote.ui.errors import map_exception
+from groundnote.ui.errors import safe_failure_message
 from groundnote.ui.models import UploadOutcome, UploadOutcomeKind, UploadStage
 from groundnote.ui.state import (
     INDEXING_IN_PROGRESS,
@@ -24,8 +24,8 @@ def render_documents_page(context: ApplicationContext) -> None:
     """Render confirmed one-file processing and current document status."""
     st.header("Documents")
     st.caption("Uploads remain local. OCR is not supported in this version.")
-    uploaded, confirmed = render_upload_control(context.settings.maximum_upload_size_mb)
-    if confirmed and uploaded:
+    uploaded = render_upload_control(context.settings.maximum_upload_size_mb)
+    if uploaded and not bool(st.session_state.get(UPLOAD_IN_PROGRESS)):
         for file in uploaded:
             _process_upload(context, file)
     previous = st.session_state.get(LAST_UPLOAD_RESULT)
@@ -37,11 +37,13 @@ def render_documents_page(context: ApplicationContext) -> None:
     try:
         render_document_status(context.document_workflow.list_documents())
     except Exception as exc:
-        get_logger(__name__).warning(
-            "document_status_refresh_failed",
-            error_type=type(exc).__name__,
+        render_message(
+            safe_failure_message(
+                exc,
+                logger=get_logger(__name__),
+                event="document_status_refresh_failed",
+            )
         )
-        render_message(map_exception(exc))
 
 
 def _process_upload(context: ApplicationContext, uploaded: object) -> None:
@@ -75,9 +77,14 @@ def _process_upload(context: ApplicationContext, uploaded: object) -> None:
         else:
             status.update(label="Document indexed successfully", state="complete", expanded=False)
     except Exception as exc:
-        get_logger(__name__).warning("ui_document_operation_failed", error_type=type(exc).__name__)
         status.update(label="Document processing failed", state="error", expanded=True)
-        render_message(map_exception(exc))
+        render_message(
+            safe_failure_message(
+                exc,
+                logger=get_logger(__name__),
+                event="ui_document_operation_failed",
+            )
+        )
     finally:
         st.session_state[UPLOAD_IN_PROGRESS] = False
         st.session_state[INDEXING_IN_PROGRESS] = False

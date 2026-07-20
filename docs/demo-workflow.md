@@ -15,7 +15,7 @@ Use an original, non-private PDF, DOCX, TXT, or Markdown document for demonstrat
    uv run streamlit run src/groundnote/app.py
    ```
 
-3. In the sidebar, choose one or more supported files and select **Process documents**.
+3. In the sidebar, choose one or more supported files. GroundNote begins processing automatically.
 4. Observe the local processing stages and confirm the document status becomes **Ready**.
 5. Ask a question directly answered by the document in the main chat input.
 6. Inspect the grounded answer, inline `[S1]` marker, and trusted source details.

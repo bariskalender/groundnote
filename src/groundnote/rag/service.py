@@ -28,7 +28,7 @@ from groundnote.rag.models import Citation, RagAnswer, RagContextItem, RagReques
 from groundnote.rag.prompts import build_prompt
 from groundnote.rag.validation import normalize_query
 from groundnote.retrieval.models import RetrievalResponse
-from groundnote.utils import get_logger, sanitize_log_fields
+from groundnote.utils import get_logger, safe_log_info, safe_log_warning, sanitize_log_fields
 
 MAX_ANSWER_CHARACTERS = 12_000
 
@@ -173,6 +173,7 @@ class RagService:
         try:
             self.chat_provider.load()
         except Exception as exc:
+            self._unload_chat_model()
             raise ChatModelLoadError("Local chat model could not be loaded.") from exc
         try:
             result = self.chat_provider.generate_request(
@@ -186,6 +187,7 @@ class RagService:
             )
             return result.text
         except Exception as exc:
+            self._unload_chat_model()
             raise ChatGenerationError("Local chat generation failed.") from exc
         finally:
             if not self.settings.keep_models_loaded:
@@ -195,7 +197,8 @@ class RagService:
         try:
             self.chat_provider.unload()
         except Exception:
-            self.logger.warning(
+            safe_log_warning(
+                self.logger,
                 "chat_model_unload_failed",
                 model=self.chat_provider.model_alias,
             )
@@ -224,7 +227,8 @@ class RagService:
         )
 
     def _log_completion(self, query: str, answer: RagAnswer) -> None:
-        self.logger.info(
+        safe_log_info(
+            self.logger,
             "rag_answer_completed",
             **sanitize_log_fields(
                 {

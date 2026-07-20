@@ -70,6 +70,11 @@ If embedding generation fails, the document is marked `FAILED` with a safe error
 remains non-searchable. Retrieval only considers documents with `INDEXED` status, so partial or
 failed indexing cannot leak into search results.
 
+Model-load failures use the same `FAILED` transition. The UI retry action preserves the document
+and chunk identities, transactionally clears incomplete embeddings with force re-indexing, and only
+returns the document to `INDEXED` after every chunk embedding is persisted. A cleanup or logging
+failure cannot replace the original provider error.
+
 Force re-indexing clears old embeddings transactionally, regenerates all embeddings, preserves
 document and chunk identities, and does not duplicate chunks.
 
@@ -80,7 +85,7 @@ not compare vectors from incompatible models or versions.
 
 ## Current Limitations
 
-- No natural-language answer generation is implemented.
+- UI indexing is automatic after file selection but remains synchronous and sequential.
 - No background indexing jobs are implemented.
 - No external vector database or SQLite vector extension is used.
 - First-time model downloads require internet; cached inference runs locally.

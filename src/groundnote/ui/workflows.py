@@ -92,13 +92,13 @@ class DocumentWorkflow:
             raise
 
         document_id = _document_id_from_plan(plan)
-        if plan.document_status is not DocumentStatus.PENDING_EMBEDDING:
+        if plan.document_status != DocumentStatus.PENDING_EMBEDDING:
             raise RuntimeError("Document ingestion did not reach the indexing boundary.")
         try:
             self._notify(on_stage, UploadStage.INDEXING)
             indexing = self.indexing_service.index_document(document_id)
             self._notify(on_stage, UploadStage.FINALIZING)
-            if indexing.status is not DocumentStatus.INDEXED:
+            if indexing.status != DocumentStatus.INDEXED:
                 raise RuntimeError("Document indexing did not complete.")
             document = self.get_document(document_id)
             self._notify(on_stage, UploadStage.READY)
@@ -149,7 +149,7 @@ class DocumentWorkflow:
         return [
             document
             for document in self.list_documents()
-            if document.status is DocumentStatus.INDEXED
+            if document.status == DocumentStatus.INDEXED
         ]
 
     def _existing_duplicate(self, error: DuplicateDocumentError) -> DocumentSummary:

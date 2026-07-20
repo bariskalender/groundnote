@@ -38,6 +38,8 @@ including deletion and re-index controls, remains future work.
   citation interface.
 - Hybrid lexical/vector retrieval with conservative typo-tolerant search.
 - Multiple-file upload, English/Turkish UI text, New chat, and performance modes.
+- Automatic sequential processing after file selection with compact per-document status and retry.
+- Gear-based settings and Streamlit-safe Windows logging without browser tracebacks.
 - Safe duplicate and insufficient-evidence presentation.
 - Unit tests.
 - Ruff and mypy checks.
@@ -63,7 +65,7 @@ hardware.
 
 ## Planned Features
 
-- Document deletion and re-indexing.
+- Document deletion and full Knowledge Base management.
 - Complete Knowledge Base management controls.
 - Additional packaging and final demonstration polish.
 
@@ -102,13 +104,15 @@ uv run pytest -m "not foundry"
 - Pre-Phase 7 UI readiness audit completed locally.
 - Phase 7 completed locally.
 - Phase 7.1 stabilization completed locally.
+- Phase 7.1.1 automatic-upload and Windows reliability patch completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
 - Semantic retrieval returns ranked chunks with citation metadata.
 - Grounded single-turn RAG answer generation is implemented with citation validation.
-- The Streamlit interface supports secure multi-file upload, local indexing, session-only chat,
-  trusted citations, compact source display, and insufficient-evidence results.
+- The Streamlit interface automatically processes selected files sequentially, shows compact safe
+  document states, supports per-document retry, and provides session-only chat, trusted citations,
+  compact source display, and insufficient-evidence results.
 - Persistent database-backed conversation memory is intentionally not implemented.
 - Document deletion, re-indexing controls, and full Knowledge Base management are not implemented.
 
@@ -127,8 +131,8 @@ User documents must not be committed to Git.
 Local models can still make mistakes. Users should verify high-stakes answers against the cited
 source documents.
 
-The interface supports English and Turkish in Phase 7.1. Answers follow the selected UI language
-when configured, otherwise the question language. Chat history is session-only.
+The interface supports English and Turkish. Answers follow the question language by default, with
+an optional session setting for English or Turkish. Chat history is session-only.
 
 ## License
 

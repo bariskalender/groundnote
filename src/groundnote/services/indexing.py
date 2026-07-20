@@ -16,7 +16,7 @@ from groundnote.embeddings import (
     IndexingResult,
 )
 from groundnote.storage import SerializedEmbedding, SQLiteUnitOfWork, serialize_embedding
-from groundnote.utils import get_logger, sanitize_log_fields
+from groundnote.utils import get_logger, safe_log_info, safe_log_warning, sanitize_log_fields
 
 
 class UnitOfWorkFactory(Protocol):
@@ -45,45 +45,54 @@ class DocumentIndexingService:
         started = time.perf_counter()
         chunks = self._prepare_for_indexing(document_id, force_reindex=force_reindex)
 
-        self.embedding_service.load()
         try:
+            self.embedding_service.load()
             serialized = self._embed_chunks(chunks)
-        except Exception as exc:
-            self._mark_failed(document_id, "Embedding generation failed during indexing.")
-            raise exc
+            embedded_at = datetime.now(UTC)
+            with self.unit_of_work_factory() as unit_of_work:
+                if unit_of_work.documents is None or unit_of_work.vectors is None:
+                    raise RuntimeError("Unit of Work repositories are unavailable.")
+                document = unit_of_work.documents.get_by_id(document_id)
+                if document.status != DocumentStatus.INDEXING:
+                    raise DocumentNotReadyForIndexingError("Document is no longer being indexed.")
+                unit_of_work.vectors.save_chunk_embeddings(
+                    [(chunk_id, embedding) for chunk_id, embedding in serialized],
+                    embedding_model=self.settings.embedding_model,
+                    embedding_version=self.settings.embedding_version,
+                    embedded_at=embedded_at,
+                )
+                indexed_document = document.model_copy(
+                    update={
+                        "status": DocumentStatus.INDEXED,
+                        "updated_at": embedded_at,
+                        "indexed_at": embedded_at,
+                        "embedding_model": self.settings.embedding_model,
+                        "embedding_dimension": self.settings.embedding_dimension,
+                        "embedding_version": self.settings.embedding_version,
+                        "error_message": None,
+                    }
+                )
+                unit_of_work.documents.update(indexed_document)
+                unit_of_work.commit()
+        except Exception:
+            self._unload_embedding_model()
+            try:
+                self._mark_failed(document_id, "Embedding generation failed during indexing.")
+            except Exception as state_error:
+                safe_log_warning(
+                    self.logger,
+                    "document_failure_state_update_failed",
+                    document_id=document_id,
+                    error_type=type(state_error).__name__,
+                )
+            raise
         finally:
             if not self.settings.keep_models_loaded:
                 self._unload_embedding_model()
 
-        embedded_at = datetime.now(UTC)
-        with self.unit_of_work_factory() as unit_of_work:
-            if unit_of_work.documents is None or unit_of_work.vectors is None:
-                raise RuntimeError("Unit of Work repositories are unavailable.")
-            document = unit_of_work.documents.get_by_id(document_id)
-            if document.status != DocumentStatus.INDEXING:
-                raise DocumentNotReadyForIndexingError("Document is no longer being indexed.")
-            unit_of_work.vectors.save_chunk_embeddings(
-                [(chunk_id, embedding) for chunk_id, embedding in serialized],
-                embedding_model=self.settings.embedding_model,
-                embedding_version=self.settings.embedding_version,
-                embedded_at=embedded_at,
-            )
-            indexed_document = document.model_copy(
-                update={
-                    "status": DocumentStatus.INDEXED,
-                    "updated_at": embedded_at,
-                    "indexed_at": embedded_at,
-                    "embedding_model": self.settings.embedding_model,
-                    "embedding_dimension": self.settings.embedding_dimension,
-                    "embedding_version": self.settings.embedding_version,
-                    "error_message": None,
-                }
-            )
-            unit_of_work.documents.update(indexed_document)
-            unit_of_work.commit()
-
         duration_ms = round((time.perf_counter() - started) * 1000, 3)
-        self.logger.info(
+        safe_log_info(
+            self.logger,
             "document_indexed",
             **sanitize_log_fields(
                 {
@@ -160,7 +169,8 @@ class DocumentIndexingService:
         try:
             self.embedding_service.unload()
         except Exception:
-            self.logger.warning(
+            safe_log_warning(
+                self.logger,
                 "embedding_model_unload_failed",
                 embedding_model=self.settings.embedding_model,
             )

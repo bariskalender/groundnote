@@ -75,3 +75,27 @@ observation as the baseline to beat during user testing with the real user docum
 - Streaming is bounded by the currently installed Foundry Local provider behavior.
 
 Phase 8 has not started.
+
+## Phase 7.1.1 Windows Reliability Patch
+
+Manual Windows testing exposed a logging lifecycle defect: the cached Structlog `PrintLogger`
+retained Streamlit's temporary stdout object across reruns. When that stream became invalid,
+`print(..., flush=True)` raised `OSError(22)` while the UI was already handling another exception.
+The logger therefore masked the original failure and Streamlit displayed a raw traceback.
+
+Phase 7.1.1 replaces that architecture with Structlog's standard-library integration and one
+idempotently configured UTF-8 rotating local file handler. Failure-path logging is best-effort, so a
+handler failure cannot replace the original error or prevent `finally` cleanup. Streamlit detailed
+browser exceptions are disabled with the installed version's supported
+`client.showErrorDetails = "none"` setting.
+
+The sidebar no longer exposes separate indexed-document and retry-indexing administration panels.
+Selecting files automatically begins local, synchronous, sequential processing. Opaque upload
+identities and safe session lifecycle sets prevent language changes, settings changes, chat
+submissions, New chat, and ordinary reruns from repeating completed or failed files. One file's
+failure does not stop later files. Failed documents receive an inline retry action, while Ready
+documents do not.
+
+Settings now live behind the upper-right gear popover. The main conversation remains visible and
+primary, source filters stay collapsed in the sidebar, and no model is loaded merely by starting the
+application or changing a setting. Automatic processing is not a background task or thread.

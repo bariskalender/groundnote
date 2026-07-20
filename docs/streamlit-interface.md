@@ -1,8 +1,8 @@
 # Streamlit Interface
 
-Phase 7.1 provides GroundNote's chat-first local user interface. It connects secure document
-upload, indexing, hybrid retrieval, and grounded RAG services without duplicating their business
-logic.
+Phase 7.1.1 provides GroundNote's chat-first local user interface. It connects automatic secure
+document processing, hybrid retrieval, and grounded RAG services without duplicating their
+business logic.
 
 ## Start The Interface
 
@@ -24,16 +24,18 @@ lightweight `foundry server status` check and never starts the service or downlo
 
 ## Layout
 
-The sidebar contains:
+The main header contains a compact gear popover for interface language, answer-language behavior,
+performance mode, and local model unloading. These controls do not load a model or restart document
+processing.
+
+The simplified sidebar contains:
 
 - New chat;
-- interface language: English or Turkish;
-- performance mode: Balanced, Fast, or Memory saver;
-- Foundry Local status (`Ready`, `Not running`, `Unavailable`, or `Unknown`);
 - multiple-file upload;
-- indexed-source summary;
-- source filters;
-- compact settings and model unload.
+- a compact Documents list with safe status labels and inline retry for failed documents;
+- optional collapsed source filters;
+- Foundry Local status (`Ready`, `Not running`, `Unavailable`, or `Unknown`);
+- a small local-only and OCR notice.
 
 The main area is the conversation. It shows assistant/user messages, compact citations, optional
 technical details, and a bottom chat input.
@@ -44,7 +46,9 @@ The upload control accepts multiple `.pdf`, `.docx`, `.txt`, `.md`, or `.markdow
 the authoritative backend validation both use the default 50 MB upload limit. Browser MIME values
 are not trusted.
 
-Processing begins only after **Process documents** is selected. Files are processed sequentially:
+Documents are automatically processed and indexed after selection. Processing is sequential and
+locally executed; this is not a background queue. No separate processing or indexing button is
+required:
 
 1. write the bytes under the application-controlled document directory with a collision-resistant
    stored filename;
@@ -65,8 +69,15 @@ Exact duplicates are not parsed, chunked, or indexed again. The temporary duplic
 and the existing safe filename and status are displayed as an informational result.
 
 One failed file does not prevent later valid files from processing. Exact duplicates are reported
-per file and are not re-indexed. A minimal retry-indexing action is available for failed or pending
-documents, but deletion and full Knowledge Base management remain Phase 8 work.
+per file and are not re-indexed. A small **Retry** action appears beside the affected failed
+document. Failed documents that reached local persistence reuse their existing document and chunk
+identity; force retry clears incomplete embeddings before rebuilding them. A parse failure that did
+not create a document requires the file to remain selected or be selected again. Uploaded bytes are
+never copied into GroundNote session state.
+
+The compact statuses are Waiting, Validating, Processing, Indexing, Ready, Already added, and
+Failed. UUID stored filenames, hashes, raw errors, chunk identifiers, embedding details, and local
+paths are not displayed.
 
 ## Ask GroundNote View
 
@@ -79,9 +90,9 @@ Each submitted document question:
 1. validate the question and current source filters;
 2. call the existing RAG service once;
 3. embed the query and retrieve local chunks;
-4. unload the embedding model;
+4. keep or unload the embedding model according to the selected performance mode;
 5. generate with the local chat model when usable context exists;
-6. unload the chat model;
+6. keep or unload the chat model according to the selected performance mode;
 7. validate citations and render the answer.
 
 Greetings, thanks, and app-help messages return immediate localized responses without retrieval,
@@ -109,17 +120,35 @@ answers.
 
 ## Session And Rerun Behavior
 
-`st.session_state` contains controlled flags, safe result models, the latest question/answer, and
-current filter IDs. It does not contain uploaded bytes, embeddings, model instances, database
+`st.session_state` contains safe message models, current filter IDs, and an upload lifecycle made of
+opaque file identities, queued/completed/failed identity sets, compact statuses, and a structured
+operation record. It does not contain uploaded bytes, embeddings, model instances, database
 connections, transactions, or persistent chat history.
 
 The application context is cached as a Streamlit resource because it contains stateless service
 composition and lazily initialized provider objects. SQLite connections remain short-lived and are
 never cached. Uploaded bytes, extracted text, prompts, answers, and vectors are not cached.
 
-Button and chat-input event semantics prevent a normal rerun from repeating an operation. SHA-256
-duplicate detection remains the authoritative fallback if a user explicitly submits identical
-content again.
+Stable upload identities combine safe filename, size, and a local content fingerprint. Completed
+and failed identities are not automatically queued again on Streamlit reruns, language changes,
+settings changes, chat submission, or New chat. SHA-256 database duplicate detection remains the
+authoritative content-level fallback. Structured operations record an ID, type, file identity,
+start/completion time, and terminal status. `try/finally` releases active state, and stale operations
+are detected after a bounded interval.
+
+## Windows Logging And Safe Errors
+
+GroundNote uses Structlog through Python standard-library logging. A UTF-8 rotating file handler
+opens and closes the local file for each record; no cached Structlog `PrintLogger` retains
+Streamlit's temporary `sys.stdout` or `sys.stderr` stream across reruns. Reconfiguration is
+idempotent. A narrow
+best-effort logging helper ensures a closed stream, invalid Windows handle, `OSError(22)`, or handler
+failure cannot replace the original application error or prevent operation-state cleanup.
+
+Streamlit `client.showErrorDetails` is set to `"none"`. Normal UI error paths map the original
+exception to localized safe text. Browser users do not receive absolute paths, usernames,
+tracebacks, source frames, exception bodies, SQL, prompts, or dependency internals. Local logs keep
+only privacy-safe event names, categories, counts, statuses, and durations.
 
 ## Privacy And Model Lifecycle
 
@@ -153,7 +182,7 @@ supported text format. Encrypted PDFs must be decrypted locally before upload.
 - No document deletion UI.
 - No force re-index or bulk indexing UI.
 - No full Knowledge Base management screen.
-- No background jobs or task queue; indexing and answers are synchronous.
+- No background jobs or task queue; automatic indexing and answers are synchronous.
 - No persistent or history-aware conversation.
 - Local semantic retrieval and local language models can make mistakes.
 

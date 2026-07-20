@@ -10,7 +10,7 @@ from groundnote.ai.models import EmbeddingBatchResult
 from groundnote.config import Settings
 from groundnote.documents import UnsupportedFileTypeError
 from groundnote.domain import DocumentStatus, SupportedFileType
-from groundnote.embeddings import EmbeddingGenerationError
+from groundnote.embeddings import EmbeddingGenerationError, EmbeddingModelLoadError
 from groundnote.ui import build_application_context
 from groundnote.ui.errors import NoFileSelectedError, NoIndexedDocumentsError
 from groundnote.ui.models import UploadOutcomeKind, UploadStage
@@ -24,6 +24,21 @@ class FailingEmbeddingProvider(FakeEmbeddingProvider):
         batch_size: int = 8,
     ) -> EmbeddingBatchResult:
         raise RuntimeError("synthetic private provider failure")
+
+
+class LoadFailEmbeddingProvider(FakeEmbeddingProvider):
+    def load(self) -> None:
+        raise RuntimeError("synthetic private model load failure")
+
+
+class CountingEmbeddingProvider(FakeEmbeddingProvider):
+    def __init__(self, dimension: int = 4) -> None:
+        super().__init__(dimension=dimension)
+        self.load_calls = 0
+
+    def load(self) -> None:
+        self.load_calls += 1
+        super().load()
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -70,7 +85,7 @@ def test_upload_orchestration_indexes_and_never_retains_bytes(tmp_path: Path) ->
 
 
 def test_duplicate_upload_does_not_index_or_create_another_file(tmp_path: Path) -> None:
-    embedding = FakeEmbeddingProvider(dimension=4)
+    embedding = CountingEmbeddingProvider(dimension=4)
     context = build_application_context(
         _settings(tmp_path),
         embedding_provider=embedding,
@@ -90,6 +105,7 @@ def test_duplicate_upload_does_not_index_or_create_another_file(tmp_path: Path) 
     assert context.settings.document_directory is not None
     assert len(list(context.settings.document_directory.iterdir())) == 1
     assert embedding.loaded is True
+    assert embedding.load_calls == 1
 
 
 def test_no_file_and_ingestion_failure_stop_before_indexing_and_cleanup(tmp_path: Path) -> None:
@@ -132,6 +148,24 @@ def test_indexing_failure_is_non_searchable_and_preserves_safe_status(tmp_path: 
     assert documents[0].status is DocumentStatus.FAILED
     assert documents[0].embedded_chunk_count == 0
     assert context.document_workflow.indexed_documents() == []
+
+
+def test_embedding_model_load_failure_marks_document_failed_and_retryable(tmp_path: Path) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=LoadFailEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+
+    with pytest.raises(EmbeddingModelLoadError):
+        context.document_workflow.process_and_index(
+            original_filename="notes.txt",
+            data=b"A valid note whose model load fails.",
+        )
+
+    document = context.document_workflow.list_documents()[0]
+    assert document.status is DocumentStatus.FAILED
+    assert document.embedded_chunk_count == 0
 
 
 def test_question_orchestration_forwards_filters_and_returns_one_latest_answer(

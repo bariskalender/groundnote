@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import time
+
 from groundnote.ui.state import (
     ACTIVE_OPERATION,
     CHAT_MESSAGES,
     CURRENT_FILTERS,
     DEFAULT_SESSION_STATE,
     LAST_RAG_ANSWER,
+    OPERATION_STALE_SECONDS,
     UPLOAD_IN_PROGRESS,
+    OperationState,
+    OperationStatus,
     begin_operation,
     clear_operation_flags,
     end_operation,
     initialize_session_state,
     operation_is_active,
+    recover_stale_operation,
 )
 
 
@@ -69,3 +75,24 @@ def test_new_chat_state_can_clear_messages_without_touching_filters() -> None:
 
     assert state[CHAT_MESSAGES] == []
     assert state[CURRENT_FILTERS] == {"document_ids": []}
+
+
+def test_stale_operation_is_detected_and_released() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+    state[ACTIVE_OPERATION] = OperationState(
+        operation_id="stale-operation",
+        operation_type="upload",
+        started_at=time.time() - OPERATION_STALE_SECONDS - 1,
+        file_identity="file-1",
+    )
+    state[UPLOAD_IN_PROGRESS] = True
+
+    recovered = recover_stale_operation(state)
+
+    assert recovered is True
+    assert state[UPLOAD_IN_PROGRESS] is False
+    operation = state[ACTIVE_OPERATION]
+    assert isinstance(operation, OperationState)
+    assert operation.status is OperationStatus.STALE
+    assert operation_is_active(state[ACTIVE_OPERATION]) is False

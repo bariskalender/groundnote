@@ -195,3 +195,33 @@ def test_model_unload_failure_does_not_corrupt_index_or_grounded_answer(tmp_path
     assert answer.answer.grounded is True
     assert embedding.loaded is False
     assert chat.loaded is False
+
+
+def test_corrupt_upload_does_not_stop_later_valid_file(tmp_path: Path) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    failures: list[str] = []
+    successes = []
+
+    for filename, data in (
+        ("corrupt.pdf", b"%PDF-1.7\nnot a valid PDF"),
+        ("after-corrupt.txt", b"The valid file is still processed after the corrupt file."),
+    ):
+        try:
+            successes.append(
+                context.document_workflow.process_and_index(
+                    original_filename=filename,
+                    data=data,
+                )
+            )
+        except Exception as exc:
+            failures.append(type(exc).__name__)
+
+    assert failures
+    assert len(successes) == 1
+    assert successes[0].document.status is DocumentStatus.INDEXED
+    assert successes[0].document.original_filename == "after-corrupt.txt"
+    assert len(context.document_workflow.list_documents()) == 1

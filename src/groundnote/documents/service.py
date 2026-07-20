@@ -25,7 +25,7 @@ from groundnote.documents.validation import (
 )
 from groundnote.domain import Document
 from groundnote.storage import DocumentRepository
-from groundnote.utils import get_logger, sanitize_log_fields
+from groundnote.utils import get_logger, safe_log_info, sanitize_log_fields
 
 
 class DuplicateLookup(Protocol):
@@ -145,7 +145,7 @@ class DocumentProcessingService:
         return parsed
 
     def _log_result(self, event: str, **fields: object) -> None:
-        self.logger.info(event, **sanitize_log_fields(dict(fields)))
+        safe_log_info(self.logger, event, **sanitize_log_fields(dict(fields)))
 
 
 def make_document_processing_service(

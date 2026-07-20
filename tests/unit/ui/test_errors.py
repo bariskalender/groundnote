@@ -59,4 +59,16 @@ def test_unexpected_error_never_leaks_path_or_stack_details(tmp_path: Path) -> N
     assert str(tmp_path) not in rendered
     assert "Traceback" not in rendered
     assert "SELECT" not in rendered
-    assert message.message == "Something went wrong while completing this operation."
+    assert message.message == (
+        "Something went wrong while completing the operation. "
+        "The state was reset, so you can try again."
+    )
+
+
+def test_unexpected_error_has_localized_reset_message() -> None:
+    message = map_exception(RuntimeError("private internal detail"), "tr")
+
+    assert message.message == (
+        "İşlem sırasında bir sorun oluştu. Durum sıfırlandı; tekrar deneyebilirsiniz."
+    )
+    assert "private internal detail" not in message.message

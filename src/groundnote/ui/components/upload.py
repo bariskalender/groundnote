@@ -14,15 +14,15 @@ from groundnote.ui.formatting import (
     safe_filename,
 )
 from groundnote.ui.models import UploadOutcome, UploadOutcomeKind
+from groundnote.ui.text import t
 
 SUPPORTED_EXTENSIONS = ["pdf", "docx", "txt", "md", "markdown"]
 
 
-def render_upload_control(maximum_size_mb: int) -> tuple[list[Any], bool]:
-    """Render multiple-file upload selection and explicit confirmation action."""
-    st.subheader("Upload documents")
-    st.write(f"Choose supported files. The configured maximum size is {maximum_size_mb} MB.")
-    st.caption("The browser file type is not trusted; GroundNote validates the content locally.")
+def render_upload_control(maximum_size_mb: int, language: str = "en") -> list[Any]:
+    """Render a multiple-file selector whose new selections are processed automatically."""
+    st.caption(t("upload_help", language))
+    st.caption(t("upload_limit", language).format(size=maximum_size_mb))
     uploaded_files = st.file_uploader(
         "PDF, DOCX, TXT, or Markdown",
         type=SUPPORTED_EXTENSIONS,
@@ -31,20 +31,12 @@ def render_upload_control(maximum_size_mb: int) -> tuple[list[Any], bool]:
     )
     uploaded = list(uploaded_files or [])
     if uploaded:
-        st.caption(f"{len(uploaded)} file(s) selected.")
-        for file in uploaded:
-            st.caption(str(getattr(file, "name", "selected file")))
-    confirmed = st.button(
-        "Process documents",
-        type="primary",
-        disabled=not uploaded,
-        use_container_width=False,
-    )
-    return uploaded, confirmed
+        st.caption(t("selected_files", language).format(count=len(uploaded)))
+    return uploaded
 
 
 def render_upload_outcome(outcome: UploadOutcome) -> None:
-    """Render a completed success or duplicate result from safe metadata."""
+    """Render a compact completed success or duplicate result from safe metadata."""
     document = outcome.document
     if outcome.kind is UploadOutcomeKind.DUPLICATE:
         st.info(
@@ -58,13 +50,6 @@ def render_upload_outcome(outcome: UploadOutcome) -> None:
     first.metric("File", safe_filename(document.original_filename))
     second.metric("Type", format_file_type(document.file_type))
     third.metric("Status", format_status(document.status))
-    details = {
-        "Size": format_file_size(document.file_size_bytes),
-        "Pages": document.page_count if document.page_count is not None else "Not available",
-        "Sections": outcome.section_count if outcome.section_count is not None else "Not available",
-        "Chunks": document.chunk_count,
-        "Indexed chunks": document.embedded_chunk_count,
-        "Embedding model": document.embedding_model or "Not available",
-        "Duration": format_duration(outcome.duration_ms),
-    }
-    st.table([details])
+    st.caption(
+        f"{format_file_size(document.file_size_bytes)} · {format_duration(outcome.duration_ms)}"
+    )

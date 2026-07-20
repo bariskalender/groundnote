@@ -29,7 +29,4 @@ def render_sidebar(context: ApplicationContext) -> str:
         st.divider()
         st.caption("Supported: PDF, DOCX, TXT, Markdown")
         st.caption("OCR is not supported. Scanned PDFs may not contain readable text.")
-        st.caption(
-            f"Local models: {context.settings.embedding_model} · {context.settings.chat_model}"
-        )
     return str(page)

@@ -20,11 +20,25 @@ def test_streamlit_application_starts_with_chat_first_sidebar(
 
     assert not app.exception
     assert app.title[0].value == "GroundNote"
-    assert app.title[0].value == "GroundNote"
     assert len(app.file_uploader) == 1
-    assert any("No indexed documents" in info.value for info in app.info)
     assert len(app.chat_input) == 1
     assert any(button.label == "New chat" for button in app.button)
+    assert not any(button.label == "Process documents" for button in app.button)
+    assert not any("Indexed documents" in header.value for header in app.subheader)
+    assert not any("Retry indexing" in header.value for header in app.subheader)
+    assert any(element.proto.popover.label == "⚙️" for element in app.get("popover"))
+    assert any(selectbox.label == "Interface language" for selectbox in app.selectbox)
+    performance = next(
+        selectbox for selectbox in app.selectbox if selectbox.label == "Performance mode"
+    )
+    assert performance.value == "Balanced"
+    assert any(subheader.value == "Documents" for subheader in app.subheader)
+    language = next(
+        selectbox for selectbox in app.selectbox if selectbox.label == "Interface language"
+    )
+    app = language.select("tr").run()
+    assert not app.exception
+    assert any(button.label == "Yeni sohbet" for button in app.button)
     context = get_application_context()
     embedding = context.embedding_provider
     chat = context.chat_provider
