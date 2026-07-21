@@ -16,7 +16,18 @@
 | 7.2 | Performance, Answer Quality, Router Robustness, and Indexing Optimization | Complete |
 | 7.2.1 | Real Test Stability, Resource Control, and Document Management Patch | Complete |
 | 7.2.2 | Section Retrieval, Answer Completion, and UI State Fixes | Complete |
-| 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Not started |
+| 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Complete |
+
+## Phase 8 Acceptance Notes
+
+- Added a localized Knowledge Base with safe document metadata and indexing statuses.
+- Added confirmed per-document removal, clear-all local-index removal, and sequential per-document
+  re-indexing without deleting original source files.
+- Added operation-safe New chat behavior and clearer empty-chat guidance without persistent chat
+  history.
+- Preserved local-only processing, source filtering, Phase 7.2.2 retrieval behavior, and
+  hidden-by-default technical details.
+- Re-index all and background indexing remain deliberately deferred.
 
 ## Phase 0 Acceptance Notes
 

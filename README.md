@@ -8,10 +8,8 @@ GroundNote is a local document assistant mainly designed for university students
 help students study from lecture notes, course documents, and personal study materials without
 sending those files to a cloud AI service.
 
-Users can upload PDF, DOCX, TXT, and Markdown files, index them locally, remove a single indexed
-document from GroundNote, and ask questions about their contents through the Streamlit interface.
-The complete Knowledge Base management workflow, including bulk controls and re-index controls,
-remains future work.
+Users can upload PDF, DOCX, TXT, and Markdown files, index them locally, manage the local
+Knowledge Base, and ask questions about their contents through the Streamlit interface.
 
 ## Why GroundNote?
 
@@ -49,6 +47,8 @@ remains future work.
   debug details, and mode-aware resource cleanup.
 - Section-title-aware retrieval, stronger unsupported-question shortcuts, cleaner answer
   formatting, and friendly busy-state handling.
+- A localized Knowledge Base with document metadata, confirmed remove and clear-all controls, and
+  sequential per-document re-indexing.
 - Safe duplicate and insufficient-evidence presentation.
 - Unit tests.
 - Ruff and mypy checks.
@@ -74,8 +74,6 @@ hardware.
 
 ## Planned Features
 
-- Complete Knowledge Base management controls.
-- Bulk document management and re-index controls.
 - Additional packaging and final demonstration polish.
 
 ## Technology Stack
@@ -118,6 +116,7 @@ uv run pytest -m "not foundry"
 - Phase 7.2.1 real-test stability, minimal document removal, inventory routing, and resource
   control patch completed locally.
 - Phase 7.2.2 section retrieval, answer completion, and UI state fixes completed locally.
+- Phase 8 Knowledge Base and lightweight session management completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
@@ -130,8 +129,8 @@ uv run pytest -m "not foundry"
   insufficient evidence without chat generation. Obvious out-of-domain named-entity questions also
   fail fast when retrieved chunks do not contain the requested entities.
 - Persistent database-backed conversation memory is intentionally not implemented.
-- Minimal single-document removal is implemented. Re-indexing controls and full Knowledge Base
-  management are not implemented.
+- Remove, clear-all, and per-document re-index controls change only GroundNote's local database
+  index; they never delete the original source files.
 
 See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
 `docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
@@ -139,7 +138,8 @@ See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking
 `docs/citations-and-language.md`, `docs/streamlit-interface.md`, `docs/demo-workflow.md`,
 `docs/phase-7-1-stabilization.md`, `docs/phase-7-2-optimization.md`, and
 `docs/phase-7-2-1-real-test-stability.md`, and
-`docs/phase-7-2-2-section-retrieval-ui-stability.md` for the current behavior and limitations.
+`docs/phase-7-2-2-section-retrieval-ui-stability.md`, and
+`docs/phase-8-knowledge-base-session-management.md` for the current behavior and limitations.
 
 ## Privacy
 

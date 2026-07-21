@@ -1,6 +1,6 @@
 # Streamlit Interface
 
-Phase 7.1.1 provides GroundNote's chat-first local user interface. It connects automatic secure
+Phase 8 provides GroundNote's chat-first local user interface. It connects automatic secure
 document processing, hybrid retrieval, and grounded RAG services without duplicating their
 business logic.
 
@@ -32,8 +32,8 @@ The simplified sidebar contains:
 
 - New chat;
 - multiple-file upload;
-- a compact Documents list with safe status labels, inline retry for failed documents, and a
-  minimal confirmed remove action;
+- a localized Knowledge Base list with safe status labels, compact metadata, inline retry for
+  failed documents, confirmed remove and clear-all actions, and per-document re-indexing;
 - optional collapsed source filters;
 - Foundry Local status (`Ready`, `Not running`, `Unavailable`, or `Unknown`);
 - a small local-only and OCR notice.
@@ -68,7 +68,7 @@ text, and vectors are not shown.
 
 Exact duplicates are not parsed, chunked, or indexed again. The temporary duplicate copy is removed
 and the existing safe filename and status are displayed as an informational result. The user-facing
-message explains that the file was already uploaded and was not processed again.
+message says that the file is already indexed.
 
 If a PDF appears to be image-only and no text can be extracted, it is not embedded and is not marked
 ready. The UI explains that OCR is not available in the MVP and asks for a text-based PDF or another
@@ -85,10 +85,17 @@ The compact statuses are Waiting, Validating, Processing, Indexing, Ready, Alrea
 Failed. UUID stored filenames, hashes, raw errors, chunk identifiers, embedding details, and local
 paths are not displayed.
 
-The remove action deletes the selected document record and local index rows from SQLite after
-confirmation. It does not delete the user's original source file from disk and does not affect other
-indexed documents. Deleted documents are excluded from future retrieval and document inventory
-answers.
+The Knowledge Base shows filename, status, file type, page count where available, chunk count, and
+indexed timestamp where available. The remove action deletes the selected document record and local
+index rows from SQLite after confirmation. **Clear all documents** has a second confirmation and
+atomically removes all GroundNote document records, chunks, embeddings, and FTS search rows. Neither
+action deletes the user's original source file from disk or unrelated local data. Deleted documents
+are excluded from future retrieval, filters, source cards, and document inventory answers.
+
+**Re-index** regenerates embeddings for the existing persisted chunks of one document in sequence;
+it does not create new chunks or duplicate FTS entries. A failed re-index leaves the document in a
+safe failed state with no searchable stale embeddings. Re-index all is intentionally deferred: it
+would add an expensive bulk operation without a background queue.
 
 ## Ask GroundNote View
 
@@ -119,7 +126,9 @@ If no document is ready, GroundNote answers locally that the user should upload 
 for processing. If at least one document is ready, questions can proceed against ready documents
 while later uploads are still processing.
 
-Conversation history is stored only in `st.session_state`. It is not persisted to SQLite.
+Conversation history is stored only in `st.session_state`. It is not persisted to SQLite. New chat
+clears messages only; it preserves the Knowledge Base, source filters, and settings. It is disabled
+while an upload, index mutation, or answer operation is active.
 
 ## Answers And Citations
 
@@ -215,9 +224,7 @@ supported text format. Encrypted PDFs must be decrypted locally before upload.
 ## Known Limitations
 
 - No OCR.
-- Minimal single-document removal exists, but full Knowledge Base management is not implemented.
-- No force re-index or bulk indexing UI.
-- No full Knowledge Base management screen.
+- No bulk re-index-all control; it is intentionally deferred until a safe background indexing design.
 - No background jobs or task queue; automatic indexing and answers are synchronous.
 - No persistent or history-aware conversation.
 - Local semantic retrieval and local language models can make mistakes.

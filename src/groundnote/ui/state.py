@@ -40,6 +40,7 @@ FAILED_UPLOAD_IDENTITIES = "failed_upload_identities"
 UPLOAD_ITEMS = "upload_items"
 SHOW_DEBUG_DETAILS = "show_debug_details"
 PENDING_DELETE_DOCUMENT_ID = "pending_delete_document_id"
+PENDING_CLEAR_DOCUMENTS = "pending_clear_documents"
 LAST_MODEL_ACTIVITY_AT = "last_model_activity_at"
 OPERATION_STALE_SECONDS = 600.0
 
@@ -68,6 +69,7 @@ DEFAULT_SESSION_STATE: dict[str, object] = {
     UPLOAD_ITEMS: {},
     SHOW_DEBUG_DETAILS: False,
     PENDING_DELETE_DOCUMENT_ID: None,
+    PENDING_CLEAR_DOCUMENTS: False,
     LAST_MODEL_ACTIVITY_AT: None,
 }
 
@@ -129,6 +131,16 @@ def can_start_operation(state: SessionStateLike) -> bool:
         None,
     )
     return not operation_is_active(current)
+
+
+def can_start_new_chat(state: SessionStateLike) -> bool:
+    """A new chat never interrupts a database or answer operation."""
+    return can_start_operation(state)
+
+
+def clear_chat_messages(state: SessionStateLike) -> None:
+    """Clear in-memory conversation messages without changing documents or settings."""
+    state[CHAT_MESSAGES] = []
 
 
 def begin_operation(

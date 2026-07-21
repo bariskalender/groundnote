@@ -36,13 +36,14 @@ def test_streamlit_application_starts_with_chat_first_sidebar(
         selectbox for selectbox in app.selectbox if selectbox.label == "Performance mode"
     )
     assert performance.value == "Balanced"
-    assert any(subheader.value == "Documents" for subheader in app.subheader)
+    assert any(subheader.value == "Knowledge Base" for subheader in app.subheader)
     language = next(
         selectbox for selectbox in app.selectbox if selectbox.label == "Interface language"
     )
     app = language.select("tr").run()
     assert not app.exception
     assert any(button.label == "Yeni sohbet" for button in app.button)
+    assert any(subheader.value == "Bilgi Tabanı" for subheader in app.subheader)
     context = get_application_context()
     embedding = context.embedding_provider
     chat = context.chat_provider

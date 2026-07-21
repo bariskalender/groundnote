@@ -26,12 +26,15 @@ from groundnote.ui.state import (
     CHAT_MESSAGES,
     CURRENT_FILTERS,
     LAST_MODEL_ACTIVITY_AT,
+    PENDING_CLEAR_DOCUMENTS,
     PENDING_DELETE_DOCUMENT_ID,
     PERFORMANCE_MODE,
     SHOW_DEBUG_DETAILS,
     UI_LANGUAGE,
     begin_operation,
+    can_start_new_chat,
     can_start_operation,
+    clear_chat_messages,
     end_operation,
     initialize_session_state,
     operation_is_active,
@@ -134,9 +137,16 @@ def _render_sidebar(
     processing_notice: object,
 ) -> None:
     with st.sidebar:
-        if st.button(t("new_chat", language), use_container_width=True):
-            st.session_state[CHAT_MESSAGES] = []
+        new_chat_allowed = can_start_new_chat(st.session_state)
+        if st.button(
+            t("new_chat", language),
+            use_container_width=True,
+            disabled=not new_chat_allowed,
+        ):
+            clear_chat_messages(st.session_state)
             st.rerun()
+        if not new_chat_allowed:
+            st.caption(t("new_chat_busy", language))
 
         st.subheader(t("upload_documents", language))
         uploaded = render_upload_control(context.settings.maximum_upload_size_mb, language)
@@ -254,7 +264,7 @@ def _render_document_list(
     language: str,
     selected: dict[str, SelectedUpload],
 ) -> None:
-    st.subheader(t("documents", language))
+    st.subheader(t("knowledge_base", language))
     try:
         documents = context.document_workflow.list_documents()
     except Exception as exc:
@@ -275,6 +285,10 @@ def _render_document_list(
     if not documents and not session_items:
         st.caption(t("no_documents", language))
         return
+
+    if documents:
+        _render_clear_all_documents(context, documents, language)
+        st.caption(t("indexed_documents", language))
 
     for document in documents[:20]:
         item = item_by_document.get(document.document_id)
@@ -437,6 +451,19 @@ def _render_chat_history(language: str) -> None:
     if not messages:
         with st.chat_message("assistant"):
             st.markdown(t("assistant_greeting", language))
+            st.caption(t("current_chat", language))
+            try:
+                has_documents = bool(
+                    get_application_context().document_workflow.indexed_documents()
+                )
+            except Exception:
+                has_documents = False
+            st.caption(
+                t(
+                    "empty_chat_with_documents" if has_documents else "empty_chat_no_documents",
+                    language,
+                )
+            )
     for message in messages:
         with st.chat_message(message.role):
             st.markdown(message.text)
@@ -657,10 +684,26 @@ def _render_document_row(  # type: ignore[no-redef]
     language: str,
     selected: dict[str, SelectedUpload],
 ) -> None:
-    """Render one document row with minimal confirmed delete support."""
-    filename_column, status_column, action_column = st.columns([6, 3, 3])
+    """Render compact metadata and confirmed document management actions."""
+    filename_column, status_column, action_column = st.columns([5, 2, 4])
     filename_column.caption(f"📄 {safe_filename(document.original_filename)}")
     status_column.caption(_document_status_label(document.status, language))
+    with st.expander(t("document_metadata", language), expanded=False):
+        metadata = [
+            t("document_type", language).format(file_type=format_file_type(document.file_type)),
+            t("document_chunks", language).format(count=document.chunk_count),
+        ]
+        if document.page_count is not None:
+            metadata.append(t("document_pages", language).format(count=document.page_count))
+        if document.indexed_at is not None:
+            metadata.append(
+                t("indexed_at", language).format(
+                    timestamp=document.indexed_at.astimezone().strftime("%Y-%m-%d %H:%M")
+                )
+            )
+        else:
+            metadata.append(t("not_indexed_yet", language))
+        st.caption(" · ".join(metadata))
     pending_delete = st.session_state.get(PENDING_DELETE_DOCUMENT_ID)
     if pending_delete == document.document_id:
         action_column.caption(t("confirm_delete_document", language))
@@ -677,9 +720,16 @@ def _render_document_row(  # type: ignore[no-redef]
             st.session_state[PENDING_DELETE_DOCUMENT_ID] = None
             st.rerun()
         return
-    if action_column.button(t("delete_document", language), key=f"delete-{document.document_id}"):
+    remove_column, reindex_column = action_column.columns(2)
+    if remove_column.button(t("delete_document", language), key=f"delete-{document.document_id}"):
         st.session_state[PENDING_DELETE_DOCUMENT_ID] = document.document_id
         st.rerun()
+    if reindex_column.button(
+        t("reindex_document", language),
+        key=f"reindex-{document.document_id}",
+        disabled=document.status in {DocumentStatus.PENDING, DocumentStatus.INDEXING},
+    ):
+        _reindex_document(context, document, language)
     if document.status == DocumentStatus.FAILED:
         identity = item.identity if item is not None else f"document-{document.document_id}"
         if action_column.button(t("retry", language), key=f"retry-{identity}"):
@@ -718,17 +768,119 @@ def _delete_document(
         st.rerun()
 
 
+def _reindex_document(
+    context: ApplicationContext,
+    document: DocumentSummary,
+    language: str,
+) -> None:
+    """Regenerate embeddings sequentially for one existing document."""
+    operation = begin_operation(st.session_state, "reindex")
+    succeeded = False
+    try:
+        with st.status(
+            t("reindexing_document", language).format(
+                filename=safe_filename(document.original_filename)
+            ),
+            expanded=False,
+        ) as status:
+            refreshed = context.document_workflow.reindex_document(document.document_id)
+            status.update(label=t("ready", language), state="complete", expanded=False)
+        st.success(
+            t("document_reindexed", language).format(
+                filename=safe_filename(refreshed.original_filename)
+            )
+        )
+        succeeded = True
+        _mark_model_activity()
+    except Exception as exc:
+        render_message(
+            safe_failure_message(
+                exc,
+                logger=get_logger(__name__),
+                event="ui_document_reindex_failed",
+                language=language,
+            )
+        )
+    finally:
+        end_operation(st.session_state, operation, succeeded=succeeded)
+    if succeeded:
+        st.rerun()
+
+
+def _render_clear_all_documents(
+    context: ApplicationContext,
+    documents: list[DocumentSummary],
+    language: str,
+) -> None:
+    """Render a deliberately confirmed local-index-only bulk removal action."""
+    pending = bool(st.session_state.get(PENDING_CLEAR_DOCUMENTS))
+    if not pending:
+        if st.button(
+            t("clear_all_documents", language),
+            key="clear-all-documents",
+            use_container_width=True,
+        ):
+            st.session_state[PENDING_CLEAR_DOCUMENTS] = True
+            st.rerun()
+        return
+    st.warning(t("clear_all_warning", language))
+    st.caption(t("confirm_clear_all_documents", language))
+    confirm_column, cancel_column = st.columns(2)
+    if confirm_column.button(
+        t("clear_all_confirm", language),
+        key="confirm-clear-all-documents",
+        type="primary",
+    ):
+        _clear_all_documents(context, documents, language)
+    if cancel_column.button(t("delete_cancel", language), key="cancel-clear-all-documents"):
+        st.session_state[PENDING_CLEAR_DOCUMENTS] = False
+        st.rerun()
+
+
+def _clear_all_documents(
+    context: ApplicationContext,
+    documents: list[DocumentSummary],
+    language: str,
+) -> None:
+    operation = begin_operation(st.session_state, "clear_documents")
+    succeeded = False
+    try:
+        deleted = context.document_workflow.clear_all_documents()
+        _clear_document_references_from_session({item.document_id for item in deleted})
+        st.session_state[PENDING_CLEAR_DOCUMENTS] = False
+        st.success(t("documents_cleared", language).format(count=len(deleted)))
+        succeeded = True
+    except Exception as exc:
+        render_message(
+            safe_failure_message(
+                exc,
+                logger=get_logger(__name__),
+                event="ui_documents_clear_failed",
+                language=language,
+            )
+        )
+    finally:
+        end_operation(st.session_state, operation, succeeded=succeeded)
+    if succeeded:
+        st.rerun()
+
+
 def _remove_deleted_document_from_session(document_id: str) -> None:
+    _clear_document_references_from_session({document_id})
+
+
+def _clear_document_references_from_session(document_ids: set[str]) -> None:
+    """Drop filters and source-bearing messages for documents no longer in the index."""
     filters = st.session_state.get(CURRENT_FILTERS, {})
     if isinstance(filters, dict):
         filters["document_ids"] = [
-            value for value in filters.get("document_ids", []) if value != document_id
+            value for value in filters.get("document_ids", []) if value not in document_ids
         ]
         st.session_state[CURRENT_FILTERS] = filters
     st.session_state[CHAT_MESSAGES] = [
         message
         for message in _messages()
-        if all(citation.document_id != document_id for citation in message.citations)
+        if all(citation.document_id not in document_ids for citation in message.citations)
     ]
 
 

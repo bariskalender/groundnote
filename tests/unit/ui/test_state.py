@@ -9,11 +9,15 @@ from groundnote.ui.state import (
     DEFAULT_SESSION_STATE,
     LAST_RAG_ANSWER,
     OPERATION_STALE_SECONDS,
+    PENDING_CLEAR_DOCUMENTS,
+    PENDING_DELETE_DOCUMENT_ID,
     UPLOAD_IN_PROGRESS,
     OperationState,
     OperationStatus,
     begin_operation,
+    can_start_new_chat,
     can_start_operation,
+    clear_chat_messages,
     clear_operation_flags,
     end_operation,
     initialize_session_state,
@@ -31,6 +35,8 @@ def test_session_state_defaults_are_deterministic() -> None:
     assert state[UPLOAD_IN_PROGRESS] is False
     assert state[LAST_RAG_ANSWER] is None
     assert state[CURRENT_FILTERS] == {"document_ids": [], "file_types": []}
+    assert state[PENDING_CLEAR_DOCUMENTS] is False
+    assert state[PENDING_DELETE_DOCUMENT_ID] is None
 
 
 def test_session_state_preserves_existing_values_and_copies_containers() -> None:
@@ -85,10 +91,32 @@ def test_new_chat_state_can_clear_messages_without_touching_filters() -> None:
     state: dict[str, object] = {CHAT_MESSAGES: ["message"], CURRENT_FILTERS: {"document_ids": []}}
     initialize_session_state(state)
 
-    state[CHAT_MESSAGES] = []
+    clear_chat_messages(state)
 
     assert state[CHAT_MESSAGES] == []
     assert state[CURRENT_FILTERS] == {"document_ids": []}
+
+
+def test_new_chat_is_blocked_only_while_an_operation_is_active() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+    operation = begin_operation(state, "upload")
+
+    assert can_start_new_chat(state) is False
+
+    end_operation(state, operation)
+    assert can_start_new_chat(state) is True
+
+
+def test_document_action_confirmation_state_is_session_only() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+
+    state[PENDING_DELETE_DOCUMENT_ID] = "document-1"
+    state[PENDING_CLEAR_DOCUMENTS] = True
+
+    assert state[PENDING_DELETE_DOCUMENT_ID] == "document-1"
+    assert state[PENDING_CLEAR_DOCUMENTS] is True
 
 
 def test_stale_operation_is_detected_and_released() -> None:

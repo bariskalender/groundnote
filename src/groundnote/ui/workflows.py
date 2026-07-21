@@ -173,6 +173,33 @@ class DocumentWorkflow:
             unit_of_work.commit()
             return summary
 
+    def clear_all_documents(self) -> list[DocumentSummary]:
+        """Clear the local GroundNote index without deleting any original source files."""
+        with self.unit_of_work_factory() as unit_of_work:
+            if unit_of_work.documents is None or unit_of_work.vectors is None:
+                raise RuntimeError("Document repositories are unavailable.")
+            documents = unit_of_work.documents.list_all()
+            summaries = [
+                _summary(
+                    document,
+                    chunk_count=unit_of_work.vectors.count_chunks_for_document(document.id),
+                    embedded_count=unit_of_work.vectors.count_embedded_chunks_for_document(
+                        document.id
+                    ),
+                )
+                for document in documents
+            ]
+            # FTS5 rows are maintained separately from the foreign-keyed chunk rows.
+            unit_of_work.vectors.clear_all_chunks()
+            unit_of_work.documents.delete_all()
+            unit_of_work.commit()
+            return summaries
+
+    def reindex_document(self, document_id: str) -> DocumentSummary:
+        """Regenerate embeddings for the existing locally persisted chunks once."""
+        self.indexing_service.index_document(document_id, force_reindex=True)
+        return self.get_document(document_id)
+
     def _existing_duplicate(self, error: DuplicateDocumentError) -> DocumentSummary:
         if error.existing_document_id is None:
             raise RuntimeError("Duplicate document metadata is unavailable.") from error

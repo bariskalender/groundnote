@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -367,3 +368,58 @@ def test_delete_document_removes_chunks_embeddings_and_retrieval_results(tmp_pat
         minimum_score=-1.0,
     )
     assert retrieval.results == []
+
+
+def test_clear_all_documents_removes_index_rows_but_not_original_local_files(
+    tmp_path: Path,
+) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    first = context.document_workflow.process_and_index(
+        original_filename="first.txt", data=b"First indexed note."
+    )
+    second = context.document_workflow.process_and_index(
+        original_filename="second.txt", data=b"Second indexed note."
+    )
+    assert context.settings.document_directory is not None
+    stored_files = list(context.settings.document_directory.iterdir())
+
+    cleared = context.document_workflow.clear_all_documents()
+
+    assert {item.document_id for item in cleared} == {
+        first.document.document_id,
+        second.document.document_id,
+    }
+    assert context.document_workflow.list_documents() == []
+    assert list(context.settings.document_directory.iterdir()) == stored_files
+    retrieval = context.retrieval_service.search("indexed note", minimum_score=-1.0)
+    assert retrieval.results == []
+    assert context.settings.database_path is not None
+    with sqlite3.connect(context.settings.database_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM document_chunks_fts").fetchone()[0] == 0
+    inventory = context.question_workflow.answer("What documents are indexed?")
+    assert inventory.answer.model == "deterministic-inventory"
+    assert "No indexed documents" in inventory.answer.answer
+
+
+def test_reindex_document_reuses_existing_chunks_without_duplicates(tmp_path: Path) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    upload = context.document_workflow.process_and_index(
+        original_filename="notes.md",
+        data=b"# Topic\n\nA local note with one stable chunk.",
+    )
+    before = context.document_workflow.get_document(upload.document.document_id)
+
+    refreshed = context.document_workflow.reindex_document(upload.document.document_id)
+
+    assert refreshed.status is DocumentStatus.INDEXED
+    assert refreshed.chunk_count == before.chunk_count
+    assert refreshed.embedded_chunk_count == before.embedded_chunk_count == before.chunk_count
+    assert len(context.document_workflow.list_documents()) == 1

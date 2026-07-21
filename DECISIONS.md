@@ -394,3 +394,24 @@ question contains multiple strong named entities and the selected context does n
 GroundNote returns localized insufficient evidence without loading the chat model or adding
 citations. This preserves offline privacy, reduces latency, and avoids plausible but unsupported
 answers.
+
+## ADR-0038: Keep Knowledge Base Mutations Local, Transactional, and Sequential
+
+- Status: Accepted
+- Date: 2026-07-22
+
+Phase 8 adds confirmed remove, clear-all, and per-document re-index controls through existing
+SQLite Unit of Work boundaries. Clear all removes document records, chunks, embeddings, and FTS rows
+inside one transaction, but deliberately never deletes the original uploaded source files. A
+per-document re-index regenerates embeddings for the existing chunks and does not create duplicate
+chunks or FTS entries. Re-index all is deferred because a synchronous bulk action would be expensive
+and confusing without a background queue.
+
+## ADR-0039: Keep Session Management In Memory Only
+
+- Status: Accepted
+- Date: 2026-07-22
+
+New chat clears only the current `st.session_state` conversation messages. It preserves indexed
+documents, user settings, and filters, is blocked during an active operation, and introduces no
+persistent chat database or history-aware retrieval.
