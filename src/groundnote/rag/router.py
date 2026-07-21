@@ -17,6 +17,7 @@ class QueryIntent(StrEnum):
     GREETING = "greeting"
     THANKS = "thanks"
     APP_HELP = "app_help"
+    DOCUMENT_INVENTORY = "document_inventory"
     DOCUMENT_QUESTION = "document_question"
 
 
@@ -56,6 +57,21 @@ _APP_HELP = {
     "nasil belge yuklerim",
     "nasıl belge yüklerim",
     "ne yapabilirsin",
+}
+_DOCUMENT_INVENTORY_MARKERS = {
+    "hangi belgeleri yukledim",
+    "hangi belgeleri yükledim",
+    "yukledigim belgeleri",
+    "yüklediğim belgeleri",
+    "indekslenmis belgeler",
+    "indekslenmiş belgeler",
+    "belgeleri konularina gore gruplandir",
+    "belgeleri konularına göre gruplandır",
+    "list my uploaded documents",
+    "group the documents i uploaded",
+    "what documents are indexed",
+    "describe each uploaded document",
+    "indexed documents",
 }
 _KNOWN_SHORT_TERMS = {
     "api",
@@ -112,6 +128,8 @@ def route_query(text: str, *, response_language: str | None = None) -> RoutedQue
         return RoutedQuery(intent=QueryIntent.THANKS, language=language)
     if normalized in _APP_HELP or _contains_any(normalized, _APP_HELP):
         return RoutedQuery(intent=QueryIntent.APP_HELP, language=language)
+    if _is_document_inventory_query(normalized):
+        return RoutedQuery(intent=QueryIntent.DOCUMENT_INVENTORY, language=language)
     if _is_unclear_input(normalized):
         return RoutedQuery(intent=QueryIntent.UNCLEAR, language=language)
     return RoutedQuery(intent=QueryIntent.DOCUMENT_QUESTION, language=language)
@@ -158,6 +176,26 @@ def _normalize(text: str) -> str:
 
 def _contains_any(text: str, phrases: set[str]) -> bool:
     return any(phrase in text for phrase in phrases if len(phrase) >= 5)
+
+
+def _is_document_inventory_query(text: str) -> bool:
+    ascii_text = _ascii_fold(text)
+    return any(
+        marker in text or _ascii_fold(marker) in ascii_text
+        for marker in _DOCUMENT_INVENTORY_MARKERS
+    )
+
+
+def _ascii_fold(text: str) -> str:
+    return (
+        text.casefold()
+        .replace("ı", "i")
+        .replace("ş", "s")
+        .replace("ğ", "g")
+        .replace("ü", "u")
+        .replace("ö", "o")
+        .replace("ç", "c")
+    )
 
 
 def _is_unclear_input(text: str) -> bool:

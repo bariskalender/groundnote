@@ -56,6 +56,21 @@ def test_router_handles_empty_input() -> None:
     assert deterministic_response(routed.intent, language="en") == "Please enter a question."
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Yüklediğim belgeleri konularına göre gruplandır",
+        "Hangi belgeleri yükledim?",
+        "Group the documents I uploaded by subject",
+        "What documents are indexed?",
+    ],
+)
+def test_router_classifies_document_inventory_questions(text: str) -> None:
+    routed = route_query(text, response_language="tr")
+
+    assert routed.intent is QueryIntent.DOCUMENT_INVENTORY
+
+
 def test_exact_bad_phase_4_refusal_is_not_grounded() -> None:
     chat = FakeChatProvider(
         responses=[

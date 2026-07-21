@@ -38,6 +38,9 @@ ACTIVE_UPLOAD_IDENTITY = "active_upload_identity"
 COMPLETED_UPLOAD_IDENTITIES = "completed_upload_identities"
 FAILED_UPLOAD_IDENTITIES = "failed_upload_identities"
 UPLOAD_ITEMS = "upload_items"
+SHOW_DEBUG_DETAILS = "show_debug_details"
+PENDING_DELETE_DOCUMENT_ID = "pending_delete_document_id"
+LAST_MODEL_ACTIVITY_AT = "last_model_activity_at"
 OPERATION_STALE_SECONDS = 600.0
 
 DEFAULT_SESSION_STATE: dict[str, object] = {
@@ -63,6 +66,9 @@ DEFAULT_SESSION_STATE: dict[str, object] = {
     COMPLETED_UPLOAD_IDENTITIES: set(),
     FAILED_UPLOAD_IDENTITIES: set(),
     UPLOAD_ITEMS: {},
+    SHOW_DEBUG_DETAILS: False,
+    PENDING_DELETE_DOCUMENT_ID: None,
+    LAST_MODEL_ACTIVITY_AT: None,
 }
 
 

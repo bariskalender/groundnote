@@ -157,6 +157,22 @@ class DocumentWorkflow:
             if document.status == DocumentStatus.INDEXED
         ]
 
+    def delete_document(self, document_id: str) -> DocumentSummary:
+        """Delete one indexed document and its local index rows without touching user files."""
+        with self.unit_of_work_factory() as unit_of_work:
+            if unit_of_work.documents is None or unit_of_work.vectors is None:
+                raise RuntimeError("Document repositories are unavailable.")
+            document = unit_of_work.documents.get_by_id(document_id)
+            summary = _summary(
+                document,
+                chunk_count=unit_of_work.vectors.count_chunks_for_document(document.id),
+                embedded_count=unit_of_work.vectors.count_embedded_chunks_for_document(document.id),
+            )
+            unit_of_work.vectors.delete_for_document(document_id)
+            unit_of_work.documents.delete(document_id)
+            unit_of_work.commit()
+            return summary
+
     def _existing_duplicate(self, error: DuplicateDocumentError) -> DocumentSummary:
         if error.existing_document_id is None:
             raise RuntimeError("Duplicate document metadata is unavailable.") from error
@@ -188,6 +204,18 @@ class QuestionWorkflow:
         started = time.perf_counter()
         routed = route_query(question, response_language=response_language)
         if routed.intent is not QueryIntent.DOCUMENT_QUESTION:
+            if routed.intent is QueryIntent.DOCUMENT_INVENTORY:
+                answer = _document_inventory_answer(
+                    self.document_workflow.list_documents(),
+                    language=routed.language,
+                    started=started,
+                )
+                return QuestionOutcome(
+                    question=question.strip(),
+                    answer=answer,
+                    document_ids=(),
+                    file_types=(),
+                )
             answer = _deterministic_answer(
                 deterministic_response(routed.intent, language=routed.language),
                 language=routed.language,
@@ -337,3 +365,164 @@ def _no_ready_document_text(language: str, *, processing: bool) -> str:
     if processing:
         return "Documents are being prepared. You can ask once at least one document is ready."
     return "Please upload a document first, then ask a question about it."
+
+
+def _document_inventory_answer(
+    documents: list[DocumentSummary],
+    *,
+    language: str,
+    started: float,
+) -> RagAnswer:
+    indexed = [document for document in documents if document.status == DocumentStatus.INDEXED]
+    processing = [
+        document for document in documents if document.status in PROCESSING_DOCUMENT_STATUSES
+    ]
+    failed = [document for document in documents if document.status == DocumentStatus.FAILED]
+    if not indexed:
+        if language == "tr":
+            text = "Henüz indekslenmiş belge yok."
+            if processing:
+                text += " Bazı belgeler hâlâ işleniyor."
+        else:
+            text = "No indexed documents are available yet."
+            if processing:
+                text += " Some documents are still processing."
+    else:
+        text = _format_document_inventory(indexed, language=language)
+        if processing:
+            text += (
+                "\n\nİşlenmekte olan belgeler de var; tamamlanınca listeye eklenir."
+                if language == "tr"
+                else "\n\nSome documents are still processing and will appear when ready."
+            )
+        if failed:
+            text += (
+                "\n\nBazı belgeler işlenemediği için hazır kaynaklara dahil edilmedi."
+                if language == "tr"
+                else "\n\nSome documents failed processing and are not included as ready sources."
+            )
+    return RagAnswer(
+        answer=text,
+        citations=[],
+        grounded=False,
+        insufficient_evidence=False,
+        response_language=cast(Literal["tr", "en"], language),
+        model="deterministic-inventory",
+        prompt_version="document-inventory-v1",
+        retrieved_count=0,
+        used_context_count=0,
+        warnings=["document_inventory_metadata"],
+        duration_ms=_elapsed_ms(started),
+    )
+
+
+def _format_document_inventory(documents: list[DocumentSummary], *, language: str) -> str:
+    title = "İndekslenmiş belgeler:" if language == "tr" else "Indexed documents:"
+    groups: dict[str, list[DocumentSummary]] = {}
+    for document in sorted(documents, key=lambda item: item.original_filename.casefold()):
+        groups.setdefault(_topic_group(document.original_filename, language=language), []).append(
+            document
+        )
+    lines = [title]
+    for group, grouped_documents in groups.items():
+        lines.append(f"\n{group}")
+        for document in grouped_documents:
+            details = _document_inventory_details(document, language=language)
+            lines.append(
+                f"- {document.original_filename} — "
+                f"{_document_description(document, language=language)}{details}"
+            )
+    return "\n".join(lines)
+
+
+def _topic_group(filename: str, *, language: str) -> str:
+    folded = _fold_filename(filename)
+    if any(term in folded for term in ("mercedes", "mb", "otomobil", "automobile", "nomenclature")):
+        return "Otomotiv" if language == "tr" else "Automotive"
+    if any(term in folded for term in ("donanim", "hardware", "arch", "cal1", "computer")):
+        return "Bilgisayar ve donanım" if language == "tr" else "Computing and hardware"
+    if any(term in folded for term in ("space", "roket", "rocket")):
+        return "Uzay ve roket sistemleri" if language == "tr" else "Space and rocket systems"
+    if any(term in folded for term in ("automation", "control", "hydraulic", "pneumatic")):
+        return "Otomasyon ve kontrol" if language == "tr" else "Automation and control"
+    if any(term in folded for term in ("coffee", "cocktail", "arabica", "robusta")):
+        return "Kahve ve içecekler" if language == "tr" else "Coffee and beverages"
+    return "Diğer belgeler" if language == "tr" else "Other documents"
+
+
+def _document_description(document: DocumentSummary, *, language: str) -> str:
+    folded = _fold_filename(document.original_filename)
+    if "nomenclature" in folded or folded.startswith("mb"):
+        return (
+            "Mercedes-Benz model, şasi ve motor kodları rehberi."
+            if language == "tr"
+            else "A Mercedes-Benz model, chassis, and engine code guide."
+        )
+    if "donanim" in folded or "hardware" in folded:
+        return (
+            "Bilgisayar donanımı ve temel bilgi teknolojileri belgesi."
+            if language == "tr"
+            else "A document about computer hardware and basic information technology."
+        )
+    if "cal1" in folded or "arch" in folded:
+        return (
+            "Bilgisayar organizasyonu ve mimarisi ders notu."
+            if language == "tr"
+            else "A computer organization and architecture study document."
+        )
+    if "space" in folded:
+        return (
+            "Uzay tarihi, roket motorları ve yörünge mekaniği üzerine belge."
+            if language == "tr"
+            else "A document about space history, rocket engines, and orbital mechanics."
+        )
+    if "otomobil" in folded or "automobile" in folded:
+        return (
+            "Otomobil tasarımı ve mühendislik geliştirme süreci belgesi."
+            if language == "tr"
+            else "A document about automobile design and engineering development."
+        )
+    if "automation" in folded or "control" in folded:
+        return (
+            "Otomasyon, kontrol mühendisliği ve akışkan güç sistemleri belgesi."
+            if language == "tr"
+            else "A document about automation, control engineering, and fluid power systems."
+        )
+    if "coffee" in folded:
+        return (
+            "Kahve türleri ve içecek hazırlama konularını anlatan belge."
+            if language == "tr"
+            else "A document about coffee varieties and drink preparation."
+        )
+    return (
+        f"{document.file_type.value.upper()} türünde indekslenmiş yerel çalışma belgesi."
+        if language == "tr"
+        else f"An indexed local {document.file_type.value.upper()} study document."
+    )
+
+
+def _document_inventory_details(document: DocumentSummary, *, language: str) -> str:
+    details: list[str] = []
+    if document.page_count is not None:
+        details.append(
+            f"{document.page_count} sayfa" if language == "tr" else f"{document.page_count} pages"
+        )
+    if document.chunk_count:
+        details.append(
+            f"{document.chunk_count} parça"
+            if language == "tr"
+            else f"{document.chunk_count} chunks"
+        )
+    return f" ({', '.join(details)})." if details else ""
+
+
+def _fold_filename(filename: str) -> str:
+    return (
+        filename.casefold()
+        .replace("ı", "i")
+        .replace("ş", "s")
+        .replace("ğ", "g")
+        .replace("ü", "u")
+        .replace("ö", "o")
+        .replace("ç", "c")
+    )

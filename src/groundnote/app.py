@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from uuid import uuid4
 
 import streamlit as st
@@ -24,7 +25,10 @@ from groundnote.ui.state import (
     ANSWER_LANGUAGE,
     CHAT_MESSAGES,
     CURRENT_FILTERS,
+    LAST_MODEL_ACTIVITY_AT,
+    PENDING_DELETE_DOCUMENT_ID,
     PERFORMANCE_MODE,
+    SHOW_DEBUG_DETAILS,
     UI_LANGUAGE,
     begin_operation,
     end_operation,
@@ -49,6 +53,9 @@ from groundnote.utils import get_logger
 
 PERFORMANCE_OPTIONS = ("Balanced", "Fast", "Memory saver")
 ANSWER_LANGUAGE_OPTIONS = ("auto", "en", "tr")
+BALANCED_MODEL_IDLE_TTL_SECONDS = 120.0
+FAST_MODEL_IDLE_TTL_SECONDS = 300.0
+MEMORY_SAVER_MODEL_IDLE_TTL_SECONDS = 15.0
 
 
 @st.cache_resource(show_spinner=False)
@@ -75,6 +82,7 @@ def main() -> None:
         return
 
     language = _render_header_and_settings(context)
+    _cleanup_idle_models(context)
     _render_chat_history(language)
     processing_notice = st.empty()
     _render_sidebar(context, language, processing_notice)
@@ -106,6 +114,7 @@ def _render_header_and_settings(context: ApplicationContext) -> str:
             format_func=lambda value: t(f"answer_{value}", language),
             key=ANSWER_LANGUAGE,
         )
+        st.toggle(t("show_debug_details", language), key=SHOW_DEBUG_DETAILS)
         if st.session_state.get(PERFORMANCE_MODE) == "Memory saver":
             st.caption(t("memory_saver_notice", language))
         st.caption(t("local_notice", language))
@@ -150,7 +159,11 @@ def _render_sidebar(
                     processing_notice,
                     t("preparing_documents", language).format(count=len(registration.queued)),
                 )
-            for selection in registration.queued:
+            queued = registration.queued
+            if queued and operation_is_active(st.session_state.get(ACTIVE_OPERATION)):
+                st.warning(t("operation_busy_indexing", language))
+                queued = ()
+            for selection in queued:
                 _process_selected_upload(context, selection, language)
             _clear_notice(processing_notice)
 
@@ -166,6 +179,7 @@ def _process_selected_upload(
     language: str,
 ) -> None:
     start_upload(st.session_state, selection.identity)
+    _unload_chat_models(context)
     operation = begin_operation(
         st.session_state,
         "upload",
@@ -208,6 +222,7 @@ def _process_selected_upload(
                 expanded=False,
             )
             succeeded = True
+            _mark_model_activity()
         except Exception as exc:
             original_error = exc
             message = safe_failure_message(
@@ -428,7 +443,7 @@ def _render_chat_history(language: str) -> None:
                 _render_compact_citations(message, language)
                 if message.duration_ms is not None:
                     st.caption(format_duration(message.duration_ms))
-                if message.warnings:
+                if message.warnings and st.session_state.get(SHOW_DEBUG_DETAILS):
                     with st.expander(t("technical_details", language), expanded=False):
                         for warning in message.warnings:
                             st.caption(warning)
@@ -436,12 +451,19 @@ def _render_chat_history(language: str) -> None:
 
 def _render_chat_input(context: ApplicationContext, language: str) -> None:
     active = operation_is_active(st.session_state.get(ACTIVE_OPERATION))
+    if active:
+        st.caption(t("operation_busy_question", language))
     prompt = st.chat_input(
         t("ask_placeholder", language),
         max_chars=context.settings.rag_max_query_characters,
         disabled=active,
     )
     if prompt:
+        if operation_is_active(st.session_state.get(ACTIVE_OPERATION)):
+            render_message(
+                map_exception(RuntimeError(t("operation_busy_question", language)), language)
+            )
+            return
         _answer_prompt(context, prompt, language)
 
 
@@ -481,8 +503,10 @@ def _answer_prompt(context: ApplicationContext, prompt: str, language: str) -> N
             _render_compact_citations(message, language)
             st.caption(format_duration(outcome.answer.duration_ms))
         succeeded = True
+        _mark_model_activity()
         if st.session_state.get(PERFORMANCE_MODE) == "Memory saver":
             unload_local_models(context)
+            _mark_model_activity(clear=True)
     except Exception as exc:
         ui_message = safe_failure_message(
             exc,
@@ -622,6 +646,116 @@ def _clear_notice(placeholder: object) -> None:
 
 def _language() -> str:
     return "tr" if st.session_state.get(UI_LANGUAGE) == "tr" else "en"
+
+
+def _render_document_row(  # type: ignore[no-redef]
+    context: ApplicationContext,
+    document: DocumentSummary,
+    item: UploadItemState | None,
+    language: str,
+    selected: dict[str, SelectedUpload],
+) -> None:
+    """Render one document row with minimal confirmed delete support."""
+    filename_column, status_column, action_column = st.columns([6, 3, 3])
+    filename_column.caption(f"📄 {safe_filename(document.original_filename)}")
+    status_column.caption(_document_status_label(document.status, language))
+    pending_delete = st.session_state.get(PENDING_DELETE_DOCUMENT_ID)
+    if pending_delete == document.document_id:
+        action_column.caption(t("confirm_delete_document", language))
+        confirm_column, cancel_column = action_column.columns(2)
+        if confirm_column.button(
+            t("delete_confirm", language),
+            key=f"confirm-delete-{document.document_id}",
+        ):
+            _delete_document(context, document, language)
+        if cancel_column.button(
+            t("delete_cancel", language),
+            key=f"cancel-delete-{document.document_id}",
+        ):
+            st.session_state[PENDING_DELETE_DOCUMENT_ID] = None
+            st.rerun()
+        return
+    if action_column.button(t("delete_document", language), key=f"delete-{document.document_id}"):
+        st.session_state[PENDING_DELETE_DOCUMENT_ID] = document.document_id
+        st.rerun()
+    if document.status == DocumentStatus.FAILED:
+        identity = item.identity if item is not None else f"document-{document.document_id}"
+        if action_column.button(t("retry", language), key=f"retry-{identity}"):
+            _retry_index_document(context, document, item, language)
+
+
+def _delete_document(
+    context: ApplicationContext,
+    document: DocumentSummary,
+    language: str,
+) -> None:
+    operation = begin_operation(st.session_state, "delete")
+    succeeded = False
+    try:
+        deleted = context.document_workflow.delete_document(document.document_id)
+        _remove_deleted_document_from_session(deleted.document_id)
+        st.session_state[PENDING_DELETE_DOCUMENT_ID] = None
+        st.success(
+            t("document_deleted", language).format(
+                filename=safe_filename(deleted.original_filename)
+            )
+        )
+        succeeded = True
+    except Exception as exc:
+        render_message(
+            safe_failure_message(
+                exc,
+                logger=get_logger(__name__),
+                event="ui_document_delete_failed",
+                language=language,
+            )
+        )
+    finally:
+        end_operation(st.session_state, operation, succeeded=succeeded)
+    if succeeded:
+        st.rerun()
+
+
+def _remove_deleted_document_from_session(document_id: str) -> None:
+    filters = st.session_state.get(CURRENT_FILTERS, {})
+    if isinstance(filters, dict):
+        filters["document_ids"] = [
+            value for value in filters.get("document_ids", []) if value != document_id
+        ]
+        st.session_state[CURRENT_FILTERS] = filters
+    st.session_state[CHAT_MESSAGES] = [
+        message
+        for message in _messages()
+        if all(citation.document_id != document_id for citation in message.citations)
+    ]
+
+
+def _unload_chat_models(context: ApplicationContext) -> None:
+    for provider in (context.chat_provider, context.fast_chat_provider):
+        try:
+            provider.unload()
+        except Exception:
+            continue
+
+
+def _mark_model_activity(*, clear: bool = False) -> None:
+    st.session_state[LAST_MODEL_ACTIVITY_AT] = None if clear else time.time()
+
+
+def _cleanup_idle_models(context: ApplicationContext) -> None:
+    mode = str(st.session_state.get(PERFORMANCE_MODE, "Balanced"))
+    ttl = {
+        "Fast": FAST_MODEL_IDLE_TTL_SECONDS,
+        "Balanced": BALANCED_MODEL_IDLE_TTL_SECONDS,
+        "Memory saver": MEMORY_SAVER_MODEL_IDLE_TTL_SECONDS,
+    }.get(mode, BALANCED_MODEL_IDLE_TTL_SECONDS)
+    last = st.session_state.get(LAST_MODEL_ACTIVITY_AT)
+    if not isinstance(last, float):
+        return
+    if time.time() - last < ttl:
+        return
+    unload_local_models(context)
+    _mark_model_activity(clear=True)
 
 
 if __name__ == "__main__":

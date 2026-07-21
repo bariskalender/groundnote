@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 7.2 complete locally. Phase 8 has not started.
+Phase 7.2.1 complete locally. Phase 8 has not started.
 
 ## Completed Tasks
 
@@ -199,6 +199,26 @@ Phase 7.2 complete locally. Phase 8 has not started.
 - Improved image-only PDF/OCR limitation messaging without adding OCR.
 - Added `docs/phase-7-2-optimization.md`.
 
+### Phase 7.2.1
+
+- Added minimal confirmed single-document removal from the Streamlit document list.
+- Deleted document rows, chunks, embeddings, and FTS rows transactionally without deleting user
+  source files from disk.
+- Added metadata-based document inventory and grouping answers that skip retrieval and chat model
+  calls.
+- Added a disabled-by-default debug details toggle while keeping compact sources visible.
+- Added normal-flow operation guards so indexing and answer generation are not started together.
+- Added mode-aware idle cleanup: Fast keeps models warm longer, Balanced unloads after a short idle
+  TTL, and Memory saver unloads after each operation.
+- Unloaded chat models before indexing when safe to reduce avoidable RAM overlap.
+- Increased the default RAG output budget to 320 tokens while strengthening concise, complete
+  answer prompting.
+- Added local cleanup for generic answer headings, dangling endings, and MB-like table/numeric
+  ambiguity.
+- Added regression coverage for document removal, document inventory routing, debug-detail default
+  visibility, operation-state cleanup, and table caution.
+- Added `docs/phase-7-2-1-real-test-stability.md`.
+
 ## Commands Run In Phase 2
 
 - `uv sync`
@@ -391,6 +411,30 @@ Phase 7.2 complete locally. Phase 8 has not started.
 - Manual Windows real-document timing smoke with MB nomenclature PDF, Turkish design PDF, generated
   image-only PDF, and a small TXT fixture.
 
+## Commands Run In Phase 7.2.1
+
+- Initial governance, attachment, Git branch, remote, synchronization, and tracked-file checks.
+- `uv run ruff check src tests`
+- `uv run mypy src`
+- Targeted workflow, router, RAG service, and Streamlit AppTest regression checks.
+- `uv run ruff format src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run pytest tests\unit\ui\test_workflows.py tests\unit\rag\test_phase_7_1_router.py tests\unit\rag\test_service.py tests\integration\ui\test_streamlit_app.py -q`
+- `uv run pytest -m "not foundry"`
+- `uv run pytest --cov=groundnote --cov-report=term-missing`
+- `uv sync`
+- `uv run python scripts\check_foundry.py`
+- `uv run python scripts\smoke_ui_pipeline.py`
+- `foundry server start`
+- `uv run python scripts\smoke_ui_real.py`
+- Foundry model unload commands for `Phi-3.5-mini-instruct-generic-cpu:2`,
+  `qwen3-embedding-0.6b-generic-cpu:1`, and `qwen2.5-0.5b-instruct-generic-cpu:4`.
+- Headless Streamlit startup smoke on port 8513, followed by verified process cleanup.
+- Representative local fixture manual smoke for inventory, delete, invalid/greeting bypasses, and
+  MB-like table ambiguity.
+
 ## Test Status
 
 - Phase 7 UI unit/integration/Streamlit target: Passed.
@@ -438,6 +482,20 @@ Phase 7.2 complete locally. Phase 8 has not started.
 - Phase 7.2 manual real-document smoke: Passed for invalid input, greeting, Mercedes chassis,
   Mercedes engine, Turkish design, image-only PDF rejection, unrelated World Cup insufficient
   evidence, and small TXT fact answer.
+- Phase 7.2.1 targeted workflow/router/RAG/UI checks: Passed, 53 tests passed.
+- Phase 7.2.1 `uv run pytest -m "not foundry"`: Passed, 235 tests passed.
+- Phase 7.2.1 coverage: Passed, 235 tests passed, 78% total coverage.
+- Phase 7.2.1 Foundry check: Passed; Foundry CLI `0.10.2`, server initially not running, cached
+  model candidates available, and no models loaded.
+- Phase 7.2.1 fake-provider UI pipeline: Passed.
+- Phase 7.2.1 real Foundry UI smoke: Passed after starting the local server, with local embeddings,
+  English/Turkish grounded answers, citations, insufficient evidence, and zero loaded models after
+  unload.
+- Phase 7.2.1 Streamlit startup smoke: Passed on port 8513; the first cleanup did not stop the
+  process, then the listener was explicitly found and stopped, leaving no listener on port 8513.
+- Phase 7.2.1 representative local fixture smoke: Passed for metadata inventory under 1 ms,
+  MB-like table caution in 2.932 ms, and deletion of an old Phases fixture from the index in
+  2.721 ms.
 - Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
 - Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
 - `uv sync`: Passed.
@@ -495,8 +553,9 @@ Phase 7.2 complete locally. Phase 8 has not started.
   fallback, but the final successful smoke used the preferred `phi-3.5-mini` model.
 - Phase 7.1 model operations remain synchronous. Balanced mode keeps models warm during the session,
   Fast uses the low-resource chat model, and Memory saver unloads after each operation.
-- Phase 7.2 automatic processing remains synchronous and sequential; it is not a background queue.
-  Document deletion and full Knowledge Base management remain Phase 8 work.
+- Phase 7.2.1 automatic processing remains synchronous and sequential; it is not a background
+  queue. Minimal single-document removal is implemented, but full Knowledge Base management,
+  bulk controls, and re-index controls remain Phase 8 work.
 - Phase 7.2 materially improves the observed 81.726 s unrelated-question path to 0.546 s by
   returning insufficient evidence before chat generation.
 - Phase 7.2 deterministic context answers are intentionally narrow and evidence-gated. General
@@ -504,6 +563,9 @@ Phase 7.2 complete locally. Phase 8 has not started.
 - Manual Phase 7.2 indexing remained slow for medium PDFs on CPU: MB PDF 98.081 s and Turkish
   design PDF 107.257 s. Duplicate detection and warm embedding reuse are improved, but full
   background indexing and broader indexing controls remain future work.
+- The requested Phase 7.2.1 real document set was not found under the repository, Downloads, or
+  Documents search locations during this patch, so representative local fixtures were used for the
+  new manual smoke. Real user documents should be re-tested in the UI when available.
 - A parse failure that occurs before persistence can be retried while the browser still supplies the
   selected upload; after the file is unavailable, the user must select it again.
 - Real Foundry Phase 7.1 smoke timings were measured on a tiny safe fixture:

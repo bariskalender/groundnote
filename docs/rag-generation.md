@@ -7,7 +7,7 @@ session-only UI history rather than persistent chat storage.
 
 1. Validate and normalize the user question.
 2. Resolve the response language as Turkish or English.
-3. Route empty, unclear, greeting, thanks, and app-help messages before RAG.
+3. Route empty, unclear, greeting, thanks, app-help, and document-inventory messages before RAG.
 4. Run hybrid retrieval once for document questions.
 5. Select bounded retrieved chunks as untrusted context.
 6. Build separated system and user prompts with prompt version `grounded-rag-v2`.
@@ -36,7 +36,7 @@ Defaults:
 - minimum score: `0.24`
 - maximum context characters: `2600`
 - maximum context chunks: `3`
-- maximum output tokens: `224`
+- maximum output tokens: `320`
 - temperature: `0.1`
 
 ## Groundedness And Insufficient Evidence
@@ -57,6 +57,10 @@ Greetings, thanks, app-help messages, empty inputs, and unclear short inputs are
 do not load embedding or chat models. Short technical terms such as `W123`, `NVH`, `CRC`, `VIN`,
 `HTTP`, and `API` are allowed through retrieval.
 
+Document inventory/grouping questions are deterministic metadata answers. They list indexed
+documents by safe filename and broad topic hints without retrieving arbitrary chunks or calling the
+chat model.
+
 If retrieval returns no result above the conservative threshold, GroundNote returns insufficient
 evidence directly and skips the chat model.
 
@@ -65,6 +69,12 @@ evidence directly and skips the chat model.
 Generated output is checked for repeated words, repeated short phrases, repeated citation markers,
 low-diversity tails, and excessive length. GroundNote trims to the last safe complete sentence when
 the useful prefix remains cited. If the output is unusable, one stricter regeneration is attempted.
+Generic answer headings such as `Answer:`, `Cevap:`, and dangling endings are removed or trimmed
+when safe.
+
+For table and numeric questions, GroundNote now instructs the local model not to infer column
+meaning when table headers are ambiguous. Evidence-gated local safeguards prefer uncertainty over
+confusing values such as horsepower/output with production counts.
 
 Citations are compact. The model is asked to cite a paragraph or bullet group once when the same
 source supports it, and the UI suppresses duplicate source labels. Technical retrieval details are

@@ -33,7 +33,8 @@ Filenames are reduced to safe display names. Stored UUID filenames and absolute 
 PDF page numbers remain 1-based.
 
 Normal chat output renders compact source labels and suppresses duplicate source rows. Technical
-retrieval details are not shown in the normal answer flow.
+retrieval details are not shown in the normal answer flow unless the user enables the debug details
+toggle.
 
 ## Language Handling
 
@@ -47,5 +48,8 @@ Supported response language values are `tr`, `en`, and `auto`.
 
 Document language does not override the user's question language. Filenames and source titles are
 preserved instead of translated.
+
+If the user explicitly asks for both English and Turkish, GroundNote asks the local model to keep
+two short sections: `English:` and `Türkçe:`. It does not add unrelated translation notes.
 
 This heuristic is intentionally lightweight and does not claim perfect language identification.

@@ -336,3 +336,37 @@ extra full model generation.
 The default RAG context and output budgets are reduced for local latency. The embedding service now
 tracks provider loaded state, letting warm sessions reuse the embedding model for sequential upload
 and retrieval bursts while Memory saver continues to unload models after each operation.
+
+## ADR-0033: Keep Phase 7.2.1 Document Removal Minimal
+
+- Status: Accepted
+- Date: 2026-07-21
+
+Phase 7.2.1 adds only a confirmed single-document remove action. It deletes the SQLite document row,
+chunk rows, embeddings, and FTS rows through the existing Unit of Work, relying on local
+transaction boundaries and parameterized repository methods. It does not delete the user's original
+source file from disk and does not add Phase 8 bulk management, folders, re-index controls, or
+advanced Knowledge Base screens.
+
+## ADR-0034: Answer Document Inventory From Metadata
+
+- Status: Accepted
+- Date: 2026-07-21
+
+Questions asking which documents are uploaded, indexed, grouped, or described are application
+inventory requests rather than normal RAG questions. GroundNote answers them from safe indexed
+document metadata and filename-derived topic hints. This avoids accidentally retrieving an old
+document such as `Phases.docx` and summarizing its content as if it were the document inventory.
+The inventory path does not call the embedding model or chat model and does not fabricate page
+citations.
+
+## ADR-0035: Use Mode-Aware Local Model Cleanup
+
+- Status: Accepted
+- Date: 2026-07-21
+
+Blindly unloading after every operation reduced RAM but made interactive use unnecessarily slow.
+Phase 7.2.1 keeps mode-aware behavior: Fast keeps models warm longer, Balanced uses a short idle
+TTL, and Memory saver unloads after each operation. The UI unloads chat models before indexing when
+safe and avoids starting indexing and answer generation simultaneously in the normal Streamlit
+flow. These controls reduce avoidable overlap but do not claim strict RAM or temperature caps.

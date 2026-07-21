@@ -31,7 +31,8 @@ Chunks are embedded sequentially in configured batches. Input order is preserved
 partial batch is supported. Empty inputs are rejected. No concurrent model calls are made.
 
 In Balanced and Fast UI modes, the embedding model may remain warm after first use for the current
-Streamlit session. Memory saver mode unloads it after each operation.
+Streamlit session. Balanced uses a short idle TTL, Fast keeps models warm longer, and Memory saver
+mode unloads after each operation.
 
 Phase 7.2 also tracks the embedding provider's loaded state inside `EmbeddingService`, so
 sequential uploads in the same warm session do not repeatedly call provider load. Duplicate uploads
@@ -90,6 +91,9 @@ not compare vectors from incompatible models or versions.
 ## Current Limitations
 
 - UI indexing is automatic after file selection but remains synchronous and sequential.
+- The UI prevents normal-flow overlap between indexing and answer generation.
+- Minimal single-document removal deletes local SQLite document/index rows, but not the user's
+  original source file on disk.
 - No background indexing jobs are implemented.
 - No external vector database or SQLite vector extension is used.
 - First-time model downloads require internet; cached inference runs locally.

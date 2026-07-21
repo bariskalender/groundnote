@@ -260,6 +260,29 @@ def test_normal_grounded_answer_is_not_an_insufficient_evidence_signal() -> None
     assert indicates_insufficient_evidence("SQLite stores embeddings. [S1]", language="en") is False
 
 
+def test_mb_table_question_does_not_treat_output_as_production_count() -> None:
+    row = "123.193 617.952 300TD Turbodiesel 1979-86 92 28,219"
+    chat = FakeChatProvider()
+    service = RagService(
+        settings=Settings(),
+        retrieval_service=FakeRetrievalService([retrieval_result(row)]),
+        chat_provider=chat,
+    )
+
+    answer = service.answer(
+        RagRequest(
+            query="W123 sedan modellerinden 300D Turbodiesel için üretim sayısı nedir?",
+            response_language="tr",
+        )
+    )
+
+    assert answer.grounded is True
+    assert "300TD" in answer.answer
+    assert "aynı model olarak kabul" in answer.answer
+    assert "üretim sayısı söyleyemem" in answer.answer
+    assert chat.calls == 0
+
+
 def test_answer_validation_rejects_bad_outputs_and_unknown_citations() -> None:
     with pytest.raises(InvalidChatResponseError):
         validate_answer_text("", allowed_ids={"S1"})

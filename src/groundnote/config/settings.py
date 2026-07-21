@@ -108,7 +108,7 @@ class Settings(BaseSettings):
     rag_max_context_characters: int = 2600
     rag_max_chunk_count: int = 3
     rag_temperature: float = 0.1
-    rag_max_output_tokens: int = 224
+    rag_max_output_tokens: int = 320
     rag_prompt_version: str = "grounded-rag-v2"
     rag_require_citations: bool = True
     rag_insufficient_evidence_mode: str = "explicit"

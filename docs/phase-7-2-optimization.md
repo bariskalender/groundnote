@@ -46,13 +46,18 @@ The default context budget is smaller:
 - minimum score: `0.24`;
 - maximum context characters: `2600`;
 - maximum context chunks: `3`;
-- maximum output tokens: `224`;
+- maximum output tokens: `320`;
 - temperature: `0.1`.
 
 GroundNote skips chat generation when retrieval confidence is below the configured threshold. The
 embedding service tracks whether the provider is already loaded, so sequential indexing and warm
 retrieval avoid unnecessary reload calls in the same session. Memory saver still unloads after
 operations.
+
+Phase 7.2.1 adds mode-aware idle cleanup on top of this behavior. Balanced unloads after a short
+idle TTL, Fast keeps models warm longer, and Memory saver unloads after each operation. The UI also
+unloads chat models before document indexing when safe and prevents normal-flow overlap between
+indexing and answer generation.
 
 ## Image-Only PDF Behavior
 

@@ -319,3 +319,51 @@ def test_insufficient_evidence_returns_no_citations_and_skips_chat(tmp_path: Pat
     assert outcome.answer.insufficient_evidence is True
     assert outcome.answer.citations == []
     assert chat.calls == 0
+
+
+def test_document_inventory_uses_metadata_and_skips_chat(tmp_path: Path) -> None:
+    chat = FakeChatProvider()
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=chat,
+    )
+    upload = context.document_workflow.process_and_index(
+        original_filename="Donanim.txt",
+        data=b"Donanim belgesi bilgisayar donanimini anlatir.",
+    )
+
+    outcome = context.question_workflow.answer(
+        "Yüklediğim belgeleri konularına göre gruplandır",
+        response_language="tr",
+    )
+
+    assert "İndekslenmiş belgeler" in outcome.answer.answer
+    assert "Donanim.txt" in outcome.answer.answer
+    assert outcome.answer.model == "deterministic-inventory"
+    assert outcome.answer.citations == []
+    assert outcome.document_ids == ()
+    assert chat.calls == 0
+    assert upload.document.document_id
+
+
+def test_delete_document_removes_chunks_embeddings_and_retrieval_results(tmp_path: Path) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    upload = context.document_workflow.process_and_index(
+        original_filename="old-phases.txt",
+        data=b"Phase roadmap content that should disappear after deletion.",
+    )
+
+    deleted = context.document_workflow.delete_document(upload.document.document_id)
+
+    assert deleted.original_filename == "old-phases.txt"
+    assert context.document_workflow.list_documents() == []
+    retrieval = context.retrieval_service.search(
+        "Phase roadmap",
+        minimum_score=-1.0,
+    )
+    assert retrieval.results == []

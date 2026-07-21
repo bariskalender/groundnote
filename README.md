@@ -8,9 +8,10 @@ GroundNote is a local document assistant mainly designed for university students
 help students study from lecture notes, course documents, and personal study materials without
 sending those files to a cloud AI service.
 
-Users can upload PDF, DOCX, TXT, and Markdown files, index them locally, and ask questions about
-their contents through the Streamlit interface. The complete Knowledge Base management workflow,
-including deletion and re-index controls, remains future work.
+Users can upload PDF, DOCX, TXT, and Markdown files, index them locally, remove a single indexed
+document from GroundNote, and ask questions about their contents through the Streamlit interface.
+The complete Knowledge Base management workflow, including bulk controls and re-index controls,
+remains future work.
 
 ## Why GroundNote?
 
@@ -44,6 +45,8 @@ including deletion and re-index controls, remains future work.
   calls.
 - Repetition protection, compact citations, lower RAG context budget, warm embedding reuse, and
   safer image-only PDF handling.
+- Minimal confirmed document removal, metadata-based document inventory answers, hidden-by-default
+  debug details, and mode-aware resource cleanup.
 - Safe duplicate and insufficient-evidence presentation.
 - Unit tests.
 - Ruff and mypy checks.
@@ -69,8 +72,8 @@ hardware.
 
 ## Planned Features
 
-- Document deletion and full Knowledge Base management.
 - Complete Knowledge Base management controls.
+- Bulk document management and re-index controls.
 - Additional packaging and final demonstration polish.
 
 ## Technology Stack
@@ -110,6 +113,8 @@ uv run pytest -m "not foundry"
 - Phase 7.1 stabilization completed locally.
 - Phase 7.1.1 automatic-upload and Windows reliability patch completed locally.
 - Phase 7.2 performance, answer quality, router, and indexing optimization completed locally.
+- Phase 7.2.1 real-test stability, minimal document removal, inventory routing, and resource
+  control patch completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
@@ -121,14 +126,15 @@ uv run pytest -m "not foundry"
 - Invalid short inputs do not call retrieval or local models. Low-confidence retrieval returns
   insufficient evidence without chat generation.
 - Persistent database-backed conversation memory is intentionally not implemented.
-- Document deletion, re-indexing controls, and full Knowledge Base management are not implemented.
+- Minimal single-document removal is implemented. Re-indexing controls and full Knowledge Base
+  management are not implemented.
 
 See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
 `docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
 `docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`,
-`docs/citations-and-language.md`, `docs/streamlit-interface.md`, `docs/demo-workflow.md`, and
-`docs/phase-7-1-stabilization.md`, `docs/phase-7-2-optimization.md` for the current behavior and
-limitations.
+`docs/citations-and-language.md`, `docs/streamlit-interface.md`, `docs/demo-workflow.md`,
+`docs/phase-7-1-stabilization.md`, `docs/phase-7-2-optimization.md`, and
+`docs/phase-7-2-1-real-test-stability.md` for the current behavior and limitations.
 
 ## Privacy
 

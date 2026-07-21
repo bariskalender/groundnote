@@ -14,6 +14,7 @@
 | 7.1 | Product Stabilization, Retrieval Reliability, Performance, and Chat UX Rebuild | Complete |
 | 7.1.1 | Automatic Document Processing, Simplified UI, and Windows Error Recovery | Complete |
 | 7.2 | Performance, Answer Quality, Router Robustness, and Indexing Optimization | Complete |
+| 7.2.1 | Real Test Stability, Resource Control, and Document Management Patch | Complete |
 | 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Not started |
 
 ## Phase 0 Acceptance Notes
@@ -181,3 +182,18 @@
 - Removed normal-flow technical citation details and kept compact trusted source labels.
 - Improved image-only PDF/OCR-safe messaging without adding OCR or hallucinated summaries.
 - Added `docs/phase-7-2-optimization.md`.
+
+## Phase 7.2.1 Acceptance Notes
+
+- Added minimal confirmed single-document removal from the Streamlit document list without deleting
+  user source files from disk.
+- Added metadata-based document inventory/grouping answers that skip retrieval and chat generation.
+- Added a disabled-by-default debug details toggle while keeping normal sources visible.
+- Added UI operation guards and sequential upload behavior so indexing and answer generation are not
+  started together.
+- Added modest performance-mode model idle cleanup and unloaded chat models before indexing.
+- Strengthened concise answer prompting, answer cleanup, bilingual guidance, and table/numeric
+  caution.
+- Added regression tests for document deletion, inventory routing, debug-detail default visibility,
+  and MB-like table ambiguity.
+- Added `docs/phase-7-2-1-real-test-stability.md`.

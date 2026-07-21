@@ -28,6 +28,10 @@ def test_streamlit_application_starts_with_chat_first_sidebar(
     assert not any("Retry indexing" in header.value for header in app.subheader)
     assert any(element.proto.popover.label == "⚙️" for element in app.get("popover"))
     assert any(selectbox.label == "Interface language" for selectbox in app.selectbox)
+    assert any(
+        toggle.label == "Show debug details" and toggle.value is False for toggle in app.toggle
+    )
+    assert "Technical details" not in str(app)
     performance = next(
         selectbox for selectbox in app.selectbox if selectbox.label == "Performance mode"
     )

@@ -28,7 +28,7 @@ TEXT: dict[str, dict[str, str]] = {
         "processing": "Processing",
         "ready": "Ready",
         "failed": "Failed",
-        "duplicate": "Already added",
+        "duplicate": "This file is already uploaded, so it was not processed again.",
         "retry": "Retry",
         "reselect_retry": "Select this file again to retry.",
         "unload_models": "Unload local models",
@@ -55,6 +55,20 @@ TEXT: dict[str, dict[str, str]] = {
         "generating": "Generating answer",
         "validating": "Validating sources",
         "technical_details": "Technical details",
+        "show_debug_details": "Show debug details",
+        "delete_document": "Remove",
+        "confirm_delete_document": "Remove this document from GroundNote?",
+        "delete_confirm": "Yes",
+        "delete_cancel": "No",
+        "document_deleted": (
+            "Removed {filename} from GroundNote. The original file on disk was not deleted."
+        ),
+        "operation_busy_question": (
+            "A document operation is running. Please wait until indexing finishes before asking a question."
+        ),
+        "operation_busy_indexing": (
+            "A document operation is running. Please wait for it to finish before starting another operation."
+        ),
         "operation_reset": (
             "Something went wrong while completing the operation. "
             "The state was reset, so you can try again."
@@ -85,7 +99,7 @@ TEXT: dict[str, dict[str, str]] = {
         "processing": "İşleniyor",
         "ready": "Hazır",
         "failed": "Başarısız",
-        "duplicate": "Zaten eklendi",
+        "duplicate": "Bu dosya zaten yüklü olduğu için tekrar işlenmedi.",
         "retry": "Tekrar dene",
         "reselect_retry": "Tekrar denemek için bu dosyayı yeniden seçin.",
         "unload_models": "Yerel modelleri boşalt",
@@ -121,8 +135,23 @@ TEXT: dict[str, dict[str, str]] = {
     },
 }
 
+TR_EXTRA_TEXT: dict[str, str] = {
+    "show_debug_details": "Geliştirici detaylarını göster",
+    "delete_document": "Kaldır",
+    "confirm_delete_document": "Bu belge GroundNote içinden kaldırılsın mı?",
+    "delete_confirm": "Evet",
+    "delete_cancel": "Hayır",
+    "document_deleted": "{filename} GroundNote içinden kaldırıldı. Diskteki özgün dosya silinmedi.",
+    "operation_busy_question": "Belge işleniyor. Lütfen indeksleme tamamlandıktan sonra soru sorun.",
+    "operation_busy_indexing": (
+        "Bir belge işlemi çalışıyor. Lütfen yeni işlem başlatmadan önce bitmesini bekleyin."
+    ),
+}
+
 
 def t(key: str, language: LanguageCode) -> str:
     """Return localized UI text with English fallback."""
+    if language == "tr" and key in TR_EXTRA_TEXT:
+        return TR_EXTRA_TEXT[key]
     language_map = TEXT.get(language, TEXT["en"])
     return language_map.get(key, TEXT["en"].get(key, key))

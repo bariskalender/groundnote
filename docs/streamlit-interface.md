@@ -25,14 +25,15 @@ lightweight `foundry server status` check and never starts the service or downlo
 ## Layout
 
 The main header contains a compact gear popover for interface language, answer-language behavior,
-performance mode, and local model unloading. These controls do not load a model or restart document
-processing.
+performance mode, a disabled-by-default debug details toggle, and local model unloading. These
+controls do not load a model or restart document processing.
 
 The simplified sidebar contains:
 
 - New chat;
 - multiple-file upload;
-- a compact Documents list with safe status labels and inline retry for failed documents;
+- a compact Documents list with safe status labels, inline retry for failed documents, and a
+  minimal confirmed remove action;
 - optional collapsed source filters;
 - Foundry Local status (`Ready`, `Not running`, `Unavailable`, or `Unknown`);
 - a small local-only and OCR notice.
@@ -66,7 +67,8 @@ status, embedding model, warnings, and duration. Stored UUID filenames, paths, h
 text, and vectors are not shown.
 
 Exact duplicates are not parsed, chunked, or indexed again. The temporary duplicate copy is removed
-and the existing safe filename and status are displayed as an informational result.
+and the existing safe filename and status are displayed as an informational result. The user-facing
+message explains that the file was already uploaded and was not processed again.
 
 If a PDF appears to be image-only and no text can be extracted, it is not embedded and is not marked
 ready. The UI explains that OCR is not available in the MVP and asks for a text-based PDF or another
@@ -82,6 +84,11 @@ never copied into GroundNote session state.
 The compact statuses are Waiting, Validating, Processing, Indexing, Ready, Already added, and
 Failed. UUID stored filenames, hashes, raw errors, chunk identifiers, embedding details, and local
 paths are not displayed.
+
+The remove action deletes the selected document record and local index rows from SQLite after
+confirmation. It does not delete the user's original source file from disk and does not affect other
+indexed documents. Deleted documents are excluded from future retrieval and document inventory
+answers.
 
 ## Ask GroundNote View
 
@@ -103,6 +110,10 @@ Empty input, unclear short input, greetings, thanks, and app-help messages retur
 localized responses without retrieval, embedding, or chat model loading. Examples such as `A`, `?`,
 `asd`, `asdf`, and `aaaa` are treated as unclear. Short automotive and technical terms such as
 `W123`, `NVH`, `CRC`, `VIN`, `HTTP`, and `API` remain valid document queries.
+
+Document inventory questions such as "What documents are indexed?", "List my uploaded documents",
+and "Group the documents I uploaded" are answered from indexed document metadata. They do not call
+retrieval or the chat model and do not fabricate page citations.
 
 If no document is ready, GroundNote answers locally that the user should upload a document or wait
 for processing. If at least one document is ready, questions can proceed against ready documents
@@ -131,6 +142,10 @@ answers.
 The answer postprocessor detects repeated words, repeated phrases, repeated citation markers, and
 runaway tails. It trims a useful cited prefix when possible, retries once with stricter instructions
 when needed, and otherwise returns a localized safe repetition message.
+
+Normal answers show the answer and compact sources. Internal router decisions, warning codes,
+retrieval scores, and model/debug details are hidden unless the user enables **Show debug details**
+in the settings popover.
 
 ## Session And Rerun Behavior
 
@@ -171,9 +186,14 @@ only privacy-safe event names, categories, counts, statuses, and durations.
 - Model downloads require internet once; cached inference is local.
 - Selecting a file, starting the app, and refreshing status load no model.
 - Balanced and Fast modes may keep models warm after first use.
-- Memory saver unloads models after each operation.
+- Balanced unloads idle models after a short local idle TTL.
+- Fast keeps models warm longer and may use more RAM.
+- Memory saver unloads models after each operation and uses a shorter idle TTL.
 - Sequential uploads reuse a warm embedding provider inside the session when the selected mode
   allows it.
+- The UI avoids starting indexing and answer generation at the same time in the normal Streamlit
+  flow.
+- Chat models are unloaded before document indexing when safe.
 - Model inference does not run while a SQLite write transaction is held.
 - Logs contain safe counts, categories, model names, statuses, and durations—not private content.
 
@@ -195,7 +215,7 @@ supported text format. Encrypted PDFs must be decrypted locally before upload.
 ## Known Limitations
 
 - No OCR.
-- No document deletion UI.
+- Minimal single-document removal exists, but full Knowledge Base management is not implemented.
 - No force re-index or bulk indexing UI.
 - No full Knowledge Base management screen.
 - No background jobs or task queue; automatic indexing and answers are synchronous.
