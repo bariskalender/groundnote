@@ -5,7 +5,10 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
+from groundnote.ai.fakes import FakeChatProvider, FakeEmbeddingProvider
 from groundnote.app import get_application_context
+from groundnote.config import Settings
+from groundnote.ui import build_application_context
 
 
 def test_streamlit_application_starts_with_chat_first_sidebar(
@@ -49,4 +52,46 @@ def test_streamlit_application_starts_with_chat_first_sidebar(
     chat = context.chat_provider
     assert getattr(embedding, "_model", None) is None
     assert getattr(chat, "_model", None) is None
+    get_application_context.clear()
+
+
+def test_knowledge_base_actions_remain_distinct_and_localized(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    data_directory = tmp_path / "app"
+    settings = Settings(
+        data_directory=data_directory,
+        embedding_dimension=4,
+        embedding_model="fake-embedding",
+        embedding_version="fake-v1",
+        chat_model="fake-chat",
+    )
+    fixture_context = build_application_context(
+        settings,
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    fixture_context.document_workflow.process_and_index(
+        original_filename="responsive-actions.txt",
+        data=b"A small local fixture for responsive document actions.",
+    )
+    monkeypatch.setenv("GROUNDNOTE_DATA_DIR", str(data_directory))
+    get_application_context.clear()
+    app_path = Path(__file__).resolve().parents[3] / "src" / "groundnote" / "app.py"
+
+    app = AppTest.from_file(str(app_path), default_timeout=20).run()
+
+    assert not app.exception
+    assert any(button.label == "Remove" for button in app.button), [
+        button.label for button in app.button
+    ]
+    assert any(button.label == "Re-index" for button in app.button)
+    language = next(
+        selectbox for selectbox in app.selectbox if selectbox.label == "Interface language"
+    )
+    app = language.select("tr").run()
+    assert not app.exception
+    assert any(button.label == "Kaldır" for button in app.button)
+    assert any(button.label == "Yeniden indeksle" for button in app.button)
     get_application_context.clear()

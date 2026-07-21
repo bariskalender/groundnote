@@ -42,6 +42,23 @@ class CountingEmbeddingProvider(FakeEmbeddingProvider):
         super().load()
 
 
+class FailOnSecondEmbeddingProvider(FakeEmbeddingProvider):
+    def __init__(self, dimension: int = 4) -> None:
+        super().__init__(dimension=dimension)
+        self.calls = 0
+
+    def embed_many(
+        self,
+        texts: Sequence[str],
+        *,
+        batch_size: int = 8,
+    ) -> EmbeddingBatchResult:
+        self.calls += 1
+        if self.calls > 1:
+            raise RuntimeError("synthetic re-index failure")
+        return super().embed_many(texts, batch_size=batch_size)
+
+
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
         data_directory=tmp_path / "app",
@@ -422,4 +439,31 @@ def test_reindex_document_reuses_existing_chunks_without_duplicates(tmp_path: Pa
     assert refreshed.status is DocumentStatus.INDEXED
     assert refreshed.chunk_count == before.chunk_count
     assert refreshed.embedded_chunk_count == before.embedded_chunk_count == before.chunk_count
+    assert refreshed.indexed_at is not None
+    assert before.indexed_at is not None
+    assert refreshed.indexed_at >= before.indexed_at
     assert len(context.document_workflow.list_documents()) == 1
+
+
+def test_failed_reindex_leaves_no_duplicate_or_searchable_stale_chunks(tmp_path: Path) -> None:
+    embedding = FailOnSecondEmbeddingProvider(dimension=4)
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=embedding,
+        chat_provider=FakeChatProvider(),
+    )
+    upload = context.document_workflow.process_and_index(
+        original_filename="reindex-failure.txt",
+        data=b"A stable chunk whose second embedding attempt fails.",
+    )
+    before = context.document_workflow.get_document(upload.document.document_id)
+
+    with pytest.raises(EmbeddingGenerationError):
+        context.document_workflow.reindex_document(upload.document.document_id)
+
+    failed = context.document_workflow.get_document(upload.document.document_id)
+    assert failed.status is DocumentStatus.FAILED
+    assert failed.chunk_count == before.chunk_count
+    assert failed.embedded_chunk_count == 0
+    embedding.calls = 0
+    assert context.retrieval_service.search("stable chunk", minimum_score=-1.0).results == []

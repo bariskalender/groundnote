@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import os
 import time
 from uuid import uuid4
 
@@ -31,6 +33,8 @@ from groundnote.ui.state import (
     PERFORMANCE_MODE,
     SHOW_DEBUG_DETAILS,
     UI_LANGUAGE,
+    FlashNotice,
+    FlashSeverity,
     begin_operation,
     can_start_new_chat,
     can_start_operation,
@@ -38,6 +42,10 @@ from groundnote.ui.state import (
     end_operation,
     initialize_session_state,
     operation_is_active,
+    pop_flash_notice,
+    reset_upload_widget,
+    set_flash_notice,
+    upload_widget_key,
 )
 from groundnote.ui.text import t
 from groundnote.ui.uploads import (
@@ -63,8 +71,9 @@ MEMORY_SAVER_MODEL_IDLE_TTL_SECONDS = 15.0
 
 
 @st.cache_resource(show_spinner=False)
-def get_application_context() -> ApplicationContext:
+def get_application_context(configuration_key: str = "default") -> ApplicationContext:
     """Cache stateless service composition, never private request data or model instances."""
+    del configuration_key
     return build_application_context()
 
 
@@ -78,7 +87,7 @@ def main() -> None:
     )
     initialize_session_state(st.session_state)
     try:
-        context = get_application_context()
+        context = get_application_context(_application_context_cache_key())
     except Exception as exc:
         error = DatabaseBootstrapError("Application bootstrap failed.")
         error.__cause__ = exc
@@ -86,8 +95,9 @@ def main() -> None:
         return
 
     language = _render_header_and_settings(context)
+    _render_flash_notice()
     _cleanup_idle_models(context)
-    _render_chat_history(language)
+    _render_chat_history(context, language)
     processing_notice = st.empty()
     _render_sidebar(context, language, processing_notice)
     _render_chat_input(context, language)
@@ -149,9 +159,19 @@ def _render_sidebar(
             st.caption(t("new_chat_busy", language))
 
         st.subheader(t("upload_documents", language))
-        uploaded = render_upload_control(context.settings.maximum_upload_size_mb, language)
+        document_operation_active = operation_is_active(st.session_state.get(ACTIVE_OPERATION))
+        uploaded = render_upload_control(
+            context.settings.maximum_upload_size_mb,
+            language,
+            disabled=document_operation_active,
+            key=upload_widget_key(st.session_state),
+        )
         try:
-            registration = register_selected_uploads(st.session_state, uploaded)
+            registration = register_selected_uploads(
+                st.session_state,
+                uploaded,
+                block_new=document_operation_active,
+            )
         except Exception as exc:
             message = safe_failure_message(
                 exc,
@@ -164,6 +184,9 @@ def _render_sidebar(
 
         selected: dict[str, SelectedUpload] = {}
         if registration is not None:
+            if registration.blocked_count:
+                st.info(t("operation_busy_upload", language))
+                reset_upload_widget(st.session_state)
             selected = registration.selected
             if registration.queued:
                 _notice(
@@ -189,6 +212,9 @@ def _process_selected_upload(
     selection: SelectedUpload,
     language: str,
 ) -> None:
+    if not can_start_operation(st.session_state):
+        st.info(t("operation_busy_upload", language))
+        return
     start_upload(st.session_state, selection.identity)
     _unload_chat_models(context)
     operation = begin_operation(
@@ -354,6 +380,9 @@ def _retry_index_document(
     item: UploadItemState | None,
     language: str,
 ) -> None:
+    if not can_start_operation(st.session_state):
+        st.info(t("operation_busy_indexing", language))
+        return
     identity = item.identity if item is not None else f"document-{document.document_id}"
     operation = begin_operation(st.session_state, "upload", file_identity=identity)
     succeeded = False
@@ -446,16 +475,14 @@ def _render_foundry_status(context: ApplicationContext, language: str) -> None:
         st.caption(status.instruction)
 
 
-def _render_chat_history(language: str) -> None:
+def _render_chat_history(context: ApplicationContext, language: str) -> None:
     messages = _messages()
     if not messages:
         with st.chat_message("assistant"):
             st.markdown(t("assistant_greeting", language))
             st.caption(t("current_chat", language))
             try:
-                has_documents = bool(
-                    get_application_context().document_workflow.indexed_documents()
-                )
+                has_documents = bool(context.document_workflow.indexed_documents())
             except Exception:
                 has_documents = False
             st.caption(
@@ -677,6 +704,19 @@ def _language() -> str:
     return "tr" if st.session_state.get(UI_LANGUAGE) == "tr" else "en"
 
 
+def _application_context_cache_key() -> str:
+    """Separate cached app composition when local path configuration changes."""
+    material = "|".join(
+        os.environ.get(name, "")
+        for name in (
+            "GROUNDNOTE_DATA_DIR",
+            "GROUNDNOTE_DATA_DIRECTORY",
+            "GROUNDNOTE_DATABASE_PATH",
+        )
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
 def _render_document_row(  # type: ignore[no-redef]
     context: ApplicationContext,
     document: DocumentSummary,
@@ -684,56 +724,73 @@ def _render_document_row(  # type: ignore[no-redef]
     language: str,
     selected: dict[str, SelectedUpload],
 ) -> None:
-    """Render compact metadata and confirmed document management actions."""
-    filename_column, status_column, action_column = st.columns([5, 2, 4])
-    filename_column.caption(f"📄 {safe_filename(document.original_filename)}")
-    status_column.caption(_document_status_label(document.status, language))
-    with st.expander(t("document_metadata", language), expanded=False):
-        metadata = [
-            t("document_type", language).format(file_type=format_file_type(document.file_type)),
-            t("document_chunks", language).format(count=document.chunk_count),
-        ]
-        if document.page_count is not None:
-            metadata.append(t("document_pages", language).format(count=document.page_count))
-        if document.indexed_at is not None:
-            metadata.append(
-                t("indexed_at", language).format(
-                    timestamp=document.indexed_at.astimezone().strftime("%Y-%m-%d %H:%M")
+    """Render one responsive card with vertically stacked full-width actions."""
+    with st.container(border=True):
+        document_action_busy = not can_start_operation(st.session_state)
+        st.caption(f"📄 {safe_filename(document.original_filename)}")
+        st.caption(_document_status_label(document.status, language))
+        with st.expander(t("document_metadata", language), expanded=False):
+            metadata = [
+                t("document_type", language).format(file_type=format_file_type(document.file_type)),
+                t("document_chunks", language).format(count=document.chunk_count),
+            ]
+            if document.page_count is not None:
+                metadata.append(t("document_pages", language).format(count=document.page_count))
+            if document.indexed_at is not None:
+                metadata.append(
+                    t("indexed_at", language).format(
+                        timestamp=document.indexed_at.astimezone().strftime("%Y-%m-%d %H:%M")
+                    )
                 )
-            )
-        else:
-            metadata.append(t("not_indexed_yet", language))
-        st.caption(" · ".join(metadata))
-    pending_delete = st.session_state.get(PENDING_DELETE_DOCUMENT_ID)
-    if pending_delete == document.document_id:
-        action_column.caption(t("confirm_delete_document", language))
-        confirm_column, cancel_column = action_column.columns(2)
-        if confirm_column.button(
-            t("delete_confirm", language),
-            key=f"confirm-delete-{document.document_id}",
+            else:
+                metadata.append(t("not_indexed_yet", language))
+            for value in metadata:
+                st.caption(value)
+
+        pending_delete = st.session_state.get(PENDING_DELETE_DOCUMENT_ID)
+        if pending_delete == document.document_id:
+            st.caption(t("confirm_delete_document", language))
+            if st.button(
+                t("delete_confirm", language),
+                key=f"confirm-delete-{document.document_id}",
+                use_container_width=True,
+                type="primary",
+                disabled=document_action_busy,
+            ):
+                _delete_document(context, document, language)
+            if st.button(
+                t("delete_cancel", language),
+                key=f"cancel-delete-{document.document_id}",
+                use_container_width=True,
+            ):
+                st.session_state[PENDING_DELETE_DOCUMENT_ID] = None
+                st.rerun()
+            return
+        if st.button(
+            t("delete_document", language),
+            key=f"delete-{document.document_id}",
+            use_container_width=True,
+            disabled=document_action_busy,
         ):
-            _delete_document(context, document, language)
-        if cancel_column.button(
-            t("delete_cancel", language),
-            key=f"cancel-delete-{document.document_id}",
-        ):
-            st.session_state[PENDING_DELETE_DOCUMENT_ID] = None
+            st.session_state[PENDING_DELETE_DOCUMENT_ID] = document.document_id
             st.rerun()
-        return
-    remove_column, reindex_column = action_column.columns(2)
-    if remove_column.button(t("delete_document", language), key=f"delete-{document.document_id}"):
-        st.session_state[PENDING_DELETE_DOCUMENT_ID] = document.document_id
-        st.rerun()
-    if reindex_column.button(
-        t("reindex_document", language),
-        key=f"reindex-{document.document_id}",
-        disabled=document.status in {DocumentStatus.PENDING, DocumentStatus.INDEXING},
-    ):
-        _reindex_document(context, document, language)
-    if document.status == DocumentStatus.FAILED:
-        identity = item.identity if item is not None else f"document-{document.document_id}"
-        if action_column.button(t("retry", language), key=f"retry-{identity}"):
-            _retry_index_document(context, document, item, language)
+        if st.button(
+            t("reindex_document", language),
+            key=f"reindex-{document.document_id}",
+            use_container_width=True,
+            disabled=document_action_busy
+            or document.status in {DocumentStatus.PENDING, DocumentStatus.INDEXING},
+        ):
+            _reindex_document(context, document, language)
+        if document.status == DocumentStatus.FAILED:
+            identity = item.identity if item is not None else f"document-{document.document_id}"
+            if st.button(
+                t("retry", language),
+                key=f"retry-{identity}",
+                use_container_width=True,
+                disabled=document_action_busy,
+            ):
+                _retry_index_document(context, document, item, language)
 
 
 def _delete_document(
@@ -741,6 +798,9 @@ def _delete_document(
     document: DocumentSummary,
     language: str,
 ) -> None:
+    if not can_start_operation(st.session_state):
+        st.info(t("operation_busy_indexing", language))
+        return
     operation = begin_operation(st.session_state, "delete")
     succeeded = False
     try:
@@ -774,8 +834,12 @@ def _reindex_document(
     language: str,
 ) -> None:
     """Regenerate embeddings sequentially for one existing document."""
+    if not can_start_operation(st.session_state):
+        st.info(t("operation_busy_indexing", language))
+        return
     operation = begin_operation(st.session_state, "reindex")
     succeeded = False
+    rerun_with_feedback = False
     try:
         with st.status(
             t("reindexing_document", language).format(
@@ -785,26 +849,58 @@ def _reindex_document(
         ) as status:
             refreshed = context.document_workflow.reindex_document(document.document_id)
             status.update(label=t("ready", language), state="complete", expanded=False)
-        st.success(
-            t("document_reindexed", language).format(
-                filename=safe_filename(refreshed.original_filename)
-            )
+        set_flash_notice(
+            st.session_state,
+            FlashNotice(
+                message=t("document_reindexed", language).format(
+                    filename=safe_filename(refreshed.original_filename)
+                ),
+                severity=FlashSeverity.SUCCESS,
+            ),
         )
         succeeded = True
+        rerun_with_feedback = True
         _mark_model_activity()
     except Exception as exc:
-        render_message(
-            safe_failure_message(
-                exc,
-                logger=get_logger(__name__),
-                event="ui_document_reindex_failed",
-                language=language,
-            )
+        message = safe_failure_message(
+            exc,
+            logger=get_logger(__name__),
+            event="ui_document_reindex_failed",
+            language=language,
         )
+        set_flash_notice(
+            st.session_state,
+            FlashNotice(
+                title=message.title,
+                message=message.message,
+                remediation=message.remediation,
+                severity=FlashSeverity.ERROR,
+            ),
+        )
+        rerun_with_feedback = True
     finally:
         end_operation(st.session_state, operation, succeeded=succeeded)
-    if succeeded:
+    if rerun_with_feedback:
         st.rerun()
+
+
+def _render_flash_notice() -> None:
+    """Render one safe operation result after rerun, then consume it."""
+    notice = pop_flash_notice(st.session_state)
+    if notice is None:
+        return
+    body = notice.message
+    if notice.title:
+        body = f"**{notice.title}**\n\n{body}"
+    if notice.remediation:
+        body = f"{body}\n\n{notice.remediation}"
+    renderer = {
+        FlashSeverity.SUCCESS: st.success,
+        FlashSeverity.INFO: st.info,
+        FlashSeverity.WARNING: st.warning,
+        FlashSeverity.ERROR: st.error,
+    }[notice.severity]
+    renderer(body)
 
 
 def _render_clear_all_documents(
@@ -819,6 +915,7 @@ def _render_clear_all_documents(
             t("clear_all_documents", language),
             key="clear-all-documents",
             use_container_width=True,
+            disabled=not can_start_operation(st.session_state),
         ):
             st.session_state[PENDING_CLEAR_DOCUMENTS] = True
             st.rerun()
@@ -830,6 +927,7 @@ def _render_clear_all_documents(
         t("clear_all_confirm", language),
         key="confirm-clear-all-documents",
         type="primary",
+        disabled=not can_start_operation(st.session_state),
     ):
         _clear_all_documents(context, documents, language)
     if cancel_column.button(t("delete_cancel", language), key="cancel-clear-all-documents"):
@@ -842,6 +940,9 @@ def _clear_all_documents(
     documents: list[DocumentSummary],
     language: str,
 ) -> None:
+    if not can_start_operation(st.session_state):
+        st.info(t("operation_busy_indexing", language))
+        return
     operation = begin_operation(st.session_state, "clear_documents")
     succeeded = False
     try:

@@ -12,6 +12,9 @@ from groundnote.ui.state import (
     PENDING_CLEAR_DOCUMENTS,
     PENDING_DELETE_DOCUMENT_ID,
     UPLOAD_IN_PROGRESS,
+    UPLOAD_WIDGET_REVISION,
+    FlashNotice,
+    FlashSeverity,
     OperationState,
     OperationStatus,
     begin_operation,
@@ -22,7 +25,11 @@ from groundnote.ui.state import (
     end_operation,
     initialize_session_state,
     operation_is_active,
+    pop_flash_notice,
     recover_stale_operation,
+    reset_upload_widget,
+    set_flash_notice,
+    upload_widget_key,
 )
 
 
@@ -74,6 +81,17 @@ def test_operation_object_starts_and_releases_without_stale_boolean_lock() -> No
     assert state[UPLOAD_IN_PROGRESS] is False
 
 
+def test_failed_operation_also_releases_busy_state() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+    operation = begin_operation(state, "upload")
+
+    end_operation(state, operation, succeeded=False)
+
+    assert operation_is_active(state[ACTIVE_OPERATION]) is False
+    assert can_start_operation(state) is True
+
+
 def test_active_operation_blocks_overlapping_work_until_released() -> None:
     state: dict[str, object] = {}
     initialize_session_state(state)
@@ -117,6 +135,32 @@ def test_document_action_confirmation_state_is_session_only() -> None:
 
     assert state[PENDING_DELETE_DOCUMENT_ID] == "document-1"
     assert state[PENDING_CLEAR_DOCUMENTS] is True
+
+
+def test_flash_notice_survives_one_rerun_and_is_consumed_once() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+    notice = FlashNotice(
+        message="notes.pdf was re-indexed successfully.",
+        severity=FlashSeverity.SUCCESS,
+    )
+
+    set_flash_notice(state, notice)
+    initialize_session_state(state)
+
+    assert pop_flash_notice(state) == notice
+    assert pop_flash_notice(state) is None
+
+
+def test_blocked_upload_can_reset_widget_without_storing_file_data() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+    first_key = upload_widget_key(state)
+
+    reset_upload_widget(state)
+
+    assert state[UPLOAD_WIDGET_REVISION] == 1
+    assert upload_widget_key(state) != first_key
 
 
 def test_stale_operation_is_detected_and_released() -> None:

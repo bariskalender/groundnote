@@ -656,6 +656,17 @@ Phase 7.2.2 complete locally. Phase 8 has not started.
 - New chat remains in-memory only and is safely blocked during active operations.
 - Re-index all and a background indexing queue were intentionally deferred.
 
+## Phase 8.1 Stabilization
+
+- Status: Complete locally; validation and push status are recorded with the Phase 8.1 session.
+- Knowledge Base actions now use responsive stacked full-width controls.
+- Active document operations reject new upload registration before it can create an orphaned queue
+  item, and all operation paths continue to release busy state in `finally` blocks.
+- Re-index success/failure feedback survives one Streamlit rerun through a privacy-safe one-time
+  session notice.
+- Local application composition caches are separated by a hash of path configuration to avoid
+  cross-database cache reuse.
+
 ## Next Phase
 
 Phase 9: Packaging and release preparation (not started).

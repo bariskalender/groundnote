@@ -415,3 +415,8 @@ and confusing without a background queue.
 New chat clears only the current `st.session_state` conversation messages. It preserves indexed
 documents, user settings, and filters, is blocked during an active operation, and introduces no
 persistent chat database or history-aware retrieval.
+
+Phase 8.1 extends this session-only policy with a single privacy-safe flash notice for document
+operation feedback. The notice contains localized display text and severity only, survives one
+Streamlit rerun, and is consumed after rendering. Uploaded bytes, document content, raw paths,
+prompts, vectors, and exceptions are never stored in the flash state.

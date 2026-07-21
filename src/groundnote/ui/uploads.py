@@ -57,19 +57,25 @@ class UploadRegistration:
 
     queued: tuple[SelectedUpload, ...]
     selected: dict[str, SelectedUpload]
+    blocked_count: int = 0
 
 
 def register_selected_uploads(
     state: SessionStateLike,
     uploaded_files: list[object],
+    *,
+    block_new: bool = False,
 ) -> UploadRegistration:
     """Queue newly selected files once without retaining their bytes in session state."""
+    if block_new:
+        return UploadRegistration(queued=(), selected={}, blocked_count=len(uploaded_files))
     queue = _string_list(state, UPLOAD_QUEUE)
     completed = _string_set(state, COMPLETED_UPLOAD_IDENTITIES)
     failed = _string_set(state, FAILED_UPLOAD_IDENTITIES)
     items = _item_map(state)
     active = _get(state, ACTIVE_UPLOAD_IDENTITY)
     queued: list[SelectedUpload] = []
+    queued_references: set[str] = set()
     selected: dict[str, SelectedUpload] = {}
     for uploaded in uploaded_files:
         filename = safe_filename(str(getattr(uploaded, "name", "document")))
@@ -78,11 +84,19 @@ def register_selected_uploads(
         del data
         selection = SelectedUpload(identity=identity, filename=filename, source=uploaded)
         selected[identity] = selection
-        if identity in completed or identity in failed or identity == active or identity in queue:
+        if identity in completed or identity in failed or identity == active:
+            continue
+        if identity in queue:
+            # Recover a previously queued selection on the next idle rerun instead of
+            # leaving a permanent Waiting item with no executable file reference.
+            if identity not in queued_references:
+                queued.append(selection)
+                queued_references.add(identity)
             continue
         queue.append(identity)
         items[identity] = UploadItemState(identity, filename, UploadStatus.WAITING)
         queued.append(selection)
+        queued_references.add(identity)
     state[UPLOAD_QUEUE] = queue
     state[UPLOAD_ITEMS] = items
     return UploadRegistration(queued=tuple(queued), selected=selected)

@@ -42,6 +42,8 @@ SHOW_DEBUG_DETAILS = "show_debug_details"
 PENDING_DELETE_DOCUMENT_ID = "pending_delete_document_id"
 PENDING_CLEAR_DOCUMENTS = "pending_clear_documents"
 LAST_MODEL_ACTIVITY_AT = "last_model_activity_at"
+FLASH_NOTICE = "flash_notice"
+UPLOAD_WIDGET_REVISION = "upload_widget_revision"
 OPERATION_STALE_SECONDS = 600.0
 
 DEFAULT_SESSION_STATE: dict[str, object] = {
@@ -71,6 +73,8 @@ DEFAULT_SESSION_STATE: dict[str, object] = {
     PENDING_DELETE_DOCUMENT_ID: None,
     PENDING_CLEAR_DOCUMENTS: False,
     LAST_MODEL_ACTIVITY_AT: None,
+    FLASH_NOTICE: None,
+    UPLOAD_WIDGET_REVISION: 0,
 }
 
 
@@ -98,6 +102,25 @@ class OperationStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     STALE = "stale"
+
+
+class FlashSeverity(StrEnum):
+    """Supported one-time notice styles across a Streamlit rerun."""
+
+    SUCCESS = "success"
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+@dataclass(frozen=True)
+class FlashNotice:
+    """Privacy-safe one-time feedback rendered after a Streamlit rerun."""
+
+    message: str
+    severity: FlashSeverity
+    title: str | None = None
+    remediation: str | None = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +164,34 @@ def can_start_new_chat(state: SessionStateLike) -> bool:
 def clear_chat_messages(state: SessionStateLike) -> None:
     """Clear in-memory conversation messages without changing documents or settings."""
     state[CHAT_MESSAGES] = []
+
+
+def set_flash_notice(state: SessionStateLike, notice: FlashNotice) -> None:
+    """Store safe feedback until the next completed render consumes it."""
+    state[FLASH_NOTICE] = notice
+
+
+def pop_flash_notice(state: SessionStateLike) -> FlashNotice | None:
+    """Return and clear one pending notice so it is rendered exactly once."""
+    current = getattr(state, "get", lambda _key, _default=None: _default)(FLASH_NOTICE, None)
+    state[FLASH_NOTICE] = None
+    return current if isinstance(current, FlashNotice) else None
+
+
+def upload_widget_key(state: SessionStateLike) -> str:
+    """Return the current stable uploader key without exposing selected file data."""
+    revision = getattr(state, "get", lambda _key, _default=None: _default)(
+        UPLOAD_WIDGET_REVISION, 0
+    )
+    safe_revision = revision if isinstance(revision, int) and revision >= 0 else 0
+    return f"groundnote-upload-{safe_revision}"
+
+
+def reset_upload_widget(state: SessionStateLike) -> None:
+    """Advance the uploader key after a selection is rejected while busy."""
+    current = getattr(state, "get", lambda _key, _default=None: _default)(UPLOAD_WIDGET_REVISION, 0)
+    revision = current if isinstance(current, int) and current >= 0 else 0
+    state[UPLOAD_WIDGET_REVISION] = revision + 1
 
 
 def begin_operation(

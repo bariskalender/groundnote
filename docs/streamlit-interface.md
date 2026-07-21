@@ -97,6 +97,10 @@ it does not create new chunks or duplicate FTS entries. A failed re-index leaves
 safe failed state with no searchable stale embeddings. Re-index all is intentionally deferred: it
 would add an expensive bulk operation without a background queue.
 
+Document actions are stacked vertically and use the available sidebar width. This keeps Remove,
+Re-index, confirmation, and Turkish labels readable when the sidebar is resized instead of forcing
+long labels into narrow side-by-side columns.
+
 ## Ask GroundNote View
 
 Only `INDEXED` documents appear as optional source filters in the sidebar. Users may select
@@ -173,6 +177,11 @@ settings changes, chat submission, or New chat. SHA-256 database duplicate detec
 authoritative content-level fallback. Structured operations record an ID, type, file identity,
 start/completion time, and terminal status. `try/finally` releases active state, and stale operations
 are detected after a bounded interval.
+
+New file selections are rejected before queue registration while a document/database operation is
+active. The UI displays a localized busy explanation and advances the upload widget key so a
+rejected selection cannot remain as an orphaned Waiting item. Successful and failed re-index results
+use a one-time safe notice that survives the completion rerun and is then removed from session state.
 
 ## Windows Logging And Safe Errors
 

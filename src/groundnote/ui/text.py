@@ -67,7 +67,7 @@ TEXT: dict[str, dict[str, str]] = {
         ),
         "reindex_document": "Re-index",
         "reindexing_document": "Re-indexing {filename}",
-        "document_reindexed": "Re-indexed {filename}.",
+        "document_reindexed": "{filename} was re-indexed successfully.",
         "clear_all_documents": "Clear all documents",
         "confirm_clear_all_documents": "Clear all documents from GroundNote's index?",
         "clear_all_warning": "This removes documents, chunks, embeddings, and search entries from GroundNote only. Original files on your computer are not deleted.",
@@ -88,6 +88,9 @@ TEXT: dict[str, dict[str, str]] = {
         ),
         "operation_busy_indexing": (
             "A document operation is running. Please wait for it to finish before starting another operation."
+        ),
+        "operation_busy_upload": (
+            "Another document operation is already in progress. Wait for it to finish before uploading another file."
         ),
         "operation_reset": (
             "Something went wrong while completing the operation. "
@@ -167,7 +170,7 @@ TR_EXTRA_TEXT: dict[str, str] = {
     "duplicate": "Bu dosya zaten indekslenmiş.",
     "reindex_document": "Yeniden indeksle",
     "reindexing_document": "{filename} yeniden indeksleniyor",
-    "document_reindexed": "{filename} yeniden indekslendi.",
+    "document_reindexed": "{filename} başarıyla yeniden indekslendi.",
     "clear_all_documents": "Tümünü temizle",
     "confirm_clear_all_documents": "Tüm belgeler GroundNote indeksinden kaldırılsın mı?",
     "clear_all_warning": "Bu işlem yalnızca GroundNote içindeki belge, parça, embedding ve arama kayıtlarını kaldırır. Bilgisayarınızdaki özgün dosyalar silinmez.",
@@ -186,6 +189,9 @@ TR_EXTRA_TEXT: dict[str, str] = {
     "operation_busy_question": "Belge işleniyor. Lütfen indeksleme tamamlandıktan sonra soru sorun.",
     "operation_busy_indexing": (
         "Bir belge işlemi çalışıyor. Lütfen yeni işlem başlatmadan önce bitmesini bekleyin."
+    ),
+    "operation_busy_upload": (
+        "Başka bir belge işlemi devam ediyor. Yeni bir dosya yüklemeden önce işlemin tamamlanmasını bekleyin."
     ),
 }
 

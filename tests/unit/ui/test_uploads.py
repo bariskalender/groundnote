@@ -108,6 +108,34 @@ def test_failed_file_is_isolated_retryable_and_state_keeps_no_bytes() -> None:
     assert all(not hasattr(item, "data") for item in state[UPLOAD_ITEMS].values())
 
 
+def test_second_upload_is_rejected_without_queueing_while_operation_is_busy() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+    second = FakeUpload("second.txt", b"second private content")
+
+    registration = register_selected_uploads(state, [second], block_new=True)
+
+    assert registration.queued == ()
+    assert registration.selected == {}
+    assert registration.blocked_count == 1
+    assert state[UPLOAD_QUEUE] == []
+    assert state[UPLOAD_ITEMS] == {}
+    assert not _contains_bytes(state)
+
+
+def test_waiting_upload_recovers_on_next_idle_rerun_instead_of_staying_locked() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+    upload = FakeUpload("waiting.txt", b"waiting")
+    first = register_selected_uploads(state, [upload])
+    identity = first.queued[0].identity
+
+    rerun = register_selected_uploads(state, [upload])
+
+    assert [selection.identity for selection in rerun.queued] == [identity]
+    assert state[UPLOAD_QUEUE] == [identity]
+
+
 def _contains_bytes(value: object) -> bool:
     if isinstance(value, bytes):
         return True
