@@ -122,6 +122,15 @@ def operation_is_active(state: object) -> bool:
     return state.active and (time.time() - state.started_at) <= OPERATION_STALE_SECONDS
 
 
+def can_start_operation(state: SessionStateLike) -> bool:
+    """Return false while a non-stale UI operation is already active."""
+    current = getattr(state, "get", lambda _key, _default=None: _default)(
+        ACTIVE_OPERATION,
+        None,
+    )
+    return not operation_is_active(current)
+
+
 def begin_operation(
     state: SessionStateLike,
     operation_type: str,

@@ -370,3 +370,27 @@ Phase 7.2.1 keeps mode-aware behavior: Fast keeps models warm longer, Balanced u
 TTL, and Memory saver unloads after each operation. The UI unloads chat models before indexing when
 safe and avoids starting indexing and answer generation simultaneously in the normal Streamlit
 flow. These controls reduce avoidable overlap but do not claim strict RAM or temperature caps.
+
+## ADR-0036: Prefer Explicit Section Matches Before Broad RAG Context
+
+- Status: Accepted
+- Date: 2026-07-21
+
+Phase 7.2.2 adds a conservative section-title filter between retrieval and RAG context assembly.
+When a query explicitly names a retrieved section or item, GroundNote keeps matching-section chunks
+and drops conflicting section chunks before building the prompt. Explicit comparison wording can
+keep multiple named sections. If the title match is ambiguous, the original ranking is preserved
+with a safe warning rather than guessing. This avoids mixing nearby document sections without
+hardcoding document-specific facts.
+
+## ADR-0037: Fail Fast When Named Entities Are Missing From Retrieved Evidence
+
+- Status: Accepted
+- Date: 2026-07-21
+
+Some unrelated questions can retrieve superficially similar chunks because they share generic
+technical terms. Phase 7.2.2 adds a named-entity coverage check after context selection. If the
+question contains multiple strong named entities and the selected context does not contain them,
+GroundNote returns localized insufficient evidence without loading the chat model or adding
+citations. This preserves offline privacy, reduces latency, and avoids plausible but unsupported
+answers.

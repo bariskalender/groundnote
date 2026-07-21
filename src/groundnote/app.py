@@ -31,6 +31,7 @@ from groundnote.ui.state import (
     SHOW_DEBUG_DETAILS,
     UI_LANGUAGE,
     begin_operation,
+    can_start_operation,
     end_operation,
     initialize_session_state,
     operation_is_active,
@@ -459,15 +460,16 @@ def _render_chat_input(context: ApplicationContext, language: str) -> None:
         disabled=active,
     )
     if prompt:
-        if operation_is_active(st.session_state.get(ACTIVE_OPERATION)):
-            render_message(
-                map_exception(RuntimeError(t("operation_busy_question", language)), language)
-            )
+        if not can_start_operation(st.session_state):
+            st.info(t("operation_busy_question", language))
             return
         _answer_prompt(context, prompt, language)
 
 
 def _answer_prompt(context: ApplicationContext, prompt: str, language: str) -> None:
+    if not can_start_operation(st.session_state):
+        st.info(t("operation_busy_question", language))
+        return
     operation = begin_operation(st.session_state, "question")
     succeeded = False
     _append_message(ChatMessageState(message_id=str(uuid4()), role="user", text=prompt.strip()))

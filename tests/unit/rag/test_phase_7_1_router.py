@@ -28,10 +28,18 @@ class CountingRetrievalService:
 
 
 def test_router_classifies_simple_turkish_greeting_without_rag() -> None:
-    routed = route_query("merhaba nasılsın", response_language="tr")
+    routed = route_query("merhaba nasılsın")
 
     assert routed.intent is QueryIntent.GREETING
     assert routed.language == "tr"
+    assert "Merhaba" in deterministic_response(routed.intent, language=routed.language)
+
+
+def test_router_classifies_simple_english_greeting_without_rag() -> None:
+    routed = route_query("Hello")
+
+    assert routed.intent is QueryIntent.GREETING
+    assert routed.language == "en"
 
 
 @pytest.mark.parametrize("text", ["A", "?", "asd", "asdf", "aaaa", "."])

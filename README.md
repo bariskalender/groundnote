@@ -47,6 +47,8 @@ remains future work.
   safer image-only PDF handling.
 - Minimal confirmed document removal, metadata-based document inventory answers, hidden-by-default
   debug details, and mode-aware resource cleanup.
+- Section-title-aware retrieval, stronger unsupported-question shortcuts, cleaner answer
+  formatting, and friendly busy-state handling.
 - Safe duplicate and insufficient-evidence presentation.
 - Unit tests.
 - Ruff and mypy checks.
@@ -115,6 +117,7 @@ uv run pytest -m "not foundry"
 - Phase 7.2 performance, answer quality, router, and indexing optimization completed locally.
 - Phase 7.2.1 real-test stability, minimal document removal, inventory routing, and resource
   control patch completed locally.
+- Phase 7.2.2 section retrieval, answer completion, and UI state fixes completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
@@ -124,7 +127,8 @@ uv run pytest -m "not foundry"
   document states, supports per-document retry, and provides session-only chat, trusted citations,
   compact source display, and insufficient-evidence results.
 - Invalid short inputs do not call retrieval or local models. Low-confidence retrieval returns
-  insufficient evidence without chat generation.
+  insufficient evidence without chat generation. Obvious out-of-domain named-entity questions also
+  fail fast when retrieved chunks do not contain the requested entities.
 - Persistent database-backed conversation memory is intentionally not implemented.
 - Minimal single-document removal is implemented. Re-indexing controls and full Knowledge Base
   management are not implemented.
@@ -134,7 +138,8 @@ See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking
 `docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`,
 `docs/citations-and-language.md`, `docs/streamlit-interface.md`, `docs/demo-workflow.md`,
 `docs/phase-7-1-stabilization.md`, `docs/phase-7-2-optimization.md`, and
-`docs/phase-7-2-1-real-test-stability.md` for the current behavior and limitations.
+`docs/phase-7-2-1-real-test-stability.md`, and
+`docs/phase-7-2-2-section-retrieval-ui-stability.md` for the current behavior and limitations.
 
 ## Privacy
 

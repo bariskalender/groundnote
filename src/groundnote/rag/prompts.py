@@ -22,6 +22,7 @@ STATUS: supported
 or
 STATUS: insufficient
 Answer in the requested language: Turkish for tr, English for en.
+Do not include a second language unless the user explicitly asks for a bilingual answer.
 Keep the answer clear, concise, and appropriately uncertain.
 Prefer complete short bullet lists over long prose."""
 
@@ -71,8 +72,11 @@ Answer requirements:
 - Answer directly and briefly, preferably with 2-5 bullets for technical explanations.
 - Keep the final answer complete. Do not end with a dangling colon, half sentence, or open list.
 - Do not begin with generic labels such as "Answer:", "Cevap:", "Cevabı:", or "Cevaplar:".
+- Do not include empty bullets, citation-only bullets, or standalone citation lines.
 - For comparison questions, prefer a compact table or 3-5 concise bullets.
 - For bilingual answers, use exactly two short sections: English: and Türkçe:.
+- For a specific named item, title, or section, use only that matching section unless the
+  question explicitly asks for a comparison.
 - Base every factual answer on the retrieved context.
 - Include at least one valid citation when the answer uses source evidence.
 - Do not include citations after STATUS: insufficient.

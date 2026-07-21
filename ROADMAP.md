@@ -15,6 +15,7 @@
 | 7.1.1 | Automatic Document Processing, Simplified UI, and Windows Error Recovery | Complete |
 | 7.2 | Performance, Answer Quality, Router Robustness, and Indexing Optimization | Complete |
 | 7.2.1 | Real Test Stability, Resource Control, and Document Management Patch | Complete |
+| 7.2.2 | Section Retrieval, Answer Completion, and UI State Fixes | Complete |
 | 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Not started |
 
 ## Phase 0 Acceptance Notes
@@ -197,3 +198,19 @@
 - Added regression tests for document deletion, inventory routing, debug-detail default visibility,
   and MB-like table ambiguity.
 - Added `docs/phase-7-2-1-real-test-stability.md`.
+
+## Phase 7.2.2 Acceptance Notes
+
+- Added section-title-aware RAG context filtering for specific named items and sections while
+  preserving explicit comparisons.
+- Added a strong-entity unsupported-question shortcut that returns insufficient evidence without
+  chat generation when retrieved chunks do not contain the named entities.
+- Hardened generated-answer formatting cleanup for empty bullets, citation-only bullets, duplicate
+  answer headings, unrequested bilingual tails, dangling endings, and malformed-output markers.
+- Updated deterministic language routing so Turkish greetings remain Turkish without requiring
+  Turkish-only characters.
+- Changed overlapping Streamlit question attempts to show a friendly busy message instead of a
+  generic operation failure.
+- Shortened the single-document remove confirmation wording and kept Phase 8 management features
+  out of scope.
+- Added `docs/phase-7-2-2-section-retrieval-ui-stability.md`.

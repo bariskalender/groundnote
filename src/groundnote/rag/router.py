@@ -119,7 +119,7 @@ _SHORT_CODE_RE = re.compile(
 def route_query(text: str, *, response_language: str | None = None) -> RoutedQuery:
     """Classify simple app-level messages before local model work."""
     normalized = _normalize(text)
-    language = resolve_response_language(text, response_language)
+    language = _resolve_router_language(text, normalized, response_language)
     if not normalized:
         return RoutedQuery(intent=QueryIntent.EMPTY, language=language)
     if normalized in _GREETING or _contains_any(normalized, _GREETING):
@@ -176,6 +176,35 @@ def _normalize(text: str) -> str:
 
 def _contains_any(text: str, phrases: set[str]) -> bool:
     return any(phrase in text for phrase in phrases if len(phrase) >= 5)
+
+
+def _resolve_router_language(text: str, normalized: str, response_language: str | None) -> str:
+    if response_language in {"tr", "en"}:
+        return response_language
+    if _looks_like_turkish_phrase(normalized):
+        return "tr"
+    if normalized in {"hello", "hi", "hey"}:
+        return "en"
+    return resolve_response_language(text, response_language)
+
+
+def _looks_like_turkish_phrase(normalized: str) -> bool:
+    ascii_text = _ascii_fold(normalized)
+    turkish_phrases = {
+        "merhaba",
+        "selam",
+        "nasilsin",
+        "gunaydin",
+        "iyi aksamlar",
+        "tesekkurler",
+        "tesekkur ederim",
+        "sag ol",
+        "hangi belgeleri",
+        "yukledigim belgeleri",
+        "ne yapabilirsin",
+        "nasil belge yuklerim",
+    }
+    return any(phrase in ascii_text for phrase in turkish_phrases)
 
 
 def _is_document_inventory_query(text: str) -> bool:

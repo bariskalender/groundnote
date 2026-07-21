@@ -13,6 +13,7 @@ from groundnote.rag import (
     RepeatingGenerationError,
 )
 from groundnote.rag.service import (
+    clean_answer_formatting,
     indicates_insufficient_evidence,
     insufficient_evidence_text,
     repair_repetition,
@@ -57,6 +58,28 @@ def retrieval_result(content: str = "GroundNote stores embeddings in SQLite.") -
         page_number=None,
         section_title="Storage",
         source_filename="notes.md",
+        source_file_type=SupportedFileType.MARKDOWN,
+        source_start_order=0,
+        source_end_order=0,
+    )
+
+
+def section_result(
+    *,
+    chunk_id: str,
+    content: str,
+    section_title: str,
+    score: float = 0.9,
+) -> RetrievalResult:
+    return RetrievalResult(
+        document_id="doc-1",
+        chunk_id=chunk_id,
+        chunk_index=int(chunk_id.rsplit("-", maxsplit=1)[-1]),
+        content=content,
+        score=score,
+        page_number=None,
+        section_title=section_title,
+        source_filename="games.md",
         source_file_type=SupportedFileType.MARKDOWN,
         source_start_order=0,
         source_end_order=0,
@@ -355,3 +378,85 @@ def test_safe_performance_report_contains_only_metadata() -> None:
     assert report["citation_count"] == 1
     assert "Where are embeddings stored?" not in repr(report)
     assert "SQLite" not in repr(report)
+
+
+def test_section_title_filter_keeps_specific_game_context_separate() -> None:
+    chat = FakeChatProvider(responses=["Altın Bilezik oyunu halka ve ebe gerektirir. [S1]"])
+    retrieval = FakeRetrievalService(
+        [
+            section_result(
+                chunk_id="chunk-0",
+                section_title="Altın Bilezik Oyunu",
+                content="Altın Bilezik oyununda halka saklanır ve ebe onu bulmaya çalışır.",
+            ),
+            section_result(
+                chunk_id="chunk-1",
+                section_title="Beştaş Oyunu",
+                content="Beştaş oyununda taşlar sırayla havaya atılır.",
+            ),
+        ]
+    )
+    service = RagService(settings=Settings(), retrieval_service=retrieval, chat_provider=chat)
+
+    answer = service.answer(RagRequest(query="Altın Bilezik oyunu nasıl oynanır?"))
+
+    assert answer.grounded is True
+    assert "conflicting_section_chunks_dropped" in answer.warnings
+    assert "Altın Bilezik" in chat.requests[0].user_prompt
+    assert "Beştaş" not in chat.requests[0].user_prompt
+
+
+def test_section_title_filter_allows_explicit_comparison() -> None:
+    chat = FakeChatProvider(responses=["Altın Bilezik ve Beştaş farklı oyunlardır. [S1][S2]"])
+    retrieval = FakeRetrievalService(
+        [
+            section_result(
+                chunk_id="chunk-0",
+                section_title="Altın Bilezik Oyunu",
+                content="Altın Bilezik oyununda halka saklanır.",
+            ),
+            section_result(
+                chunk_id="chunk-1",
+                section_title="Beştaş Oyunu",
+                content="Beştaş oyununda taşlar kullanılır.",
+            ),
+        ]
+    )
+    service = RagService(settings=Settings(), retrieval_service=retrieval, chat_provider=chat)
+
+    answer = service.answer(RagRequest(query="Altın Bilezik ve Beştaş oyunlarını karşılaştır."))
+
+    assert answer.grounded is True
+    assert "Altın Bilezik" in chat.requests[0].user_prompt
+    assert "Beştaş" in chat.requests[0].user_prompt
+
+
+def test_missing_strong_external_entities_skip_chat_generation() -> None:
+    chat = FakeChatProvider()
+    retrieval = FakeRetrievalService(
+        [
+            retrieval_result(
+                "Automobile design notes mention electric motors and efficiency in general."
+            )
+        ]
+    )
+    service = RagService(settings=Settings(), retrieval_service=retrieval, chat_provider=chat)
+
+    answer = service.answer(
+        RagRequest(query="Toyota Corolla Hybrid batarya kapasitesi ve yakıt tüketimi nedir?")
+    )
+
+    assert answer.insufficient_evidence is True
+    assert answer.citations == []
+    assert chat.calls == 0
+
+
+def test_answer_formatting_removes_empty_and_citation_only_bullets() -> None:
+    cleaned = clean_answer_formatting(
+        "Answer:\n- Useful fact from the document. [S1]\n-\n• [S1]\nAnswer:\nSecond fact. [S1]",
+        language="en",
+        requested_bilingual=False,
+        allowed_ids={"S1"},
+    )
+
+    assert cleaned == "- Useful fact from the document. [S1]\nSecond fact. [S1]"

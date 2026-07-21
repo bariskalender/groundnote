@@ -57,9 +57,9 @@ TEXT: dict[str, dict[str, str]] = {
         "technical_details": "Technical details",
         "show_debug_details": "Show debug details",
         "delete_document": "Remove",
-        "confirm_delete_document": "Remove this document from GroundNote?",
-        "delete_confirm": "Yes",
-        "delete_cancel": "No",
+        "confirm_delete_document": "Remove this document?",
+        "delete_confirm": "Remove",
+        "delete_cancel": "Cancel",
         "document_deleted": (
             "Removed {filename} from GroundNote. The original file on disk was not deleted."
         ),
@@ -138,9 +138,9 @@ TEXT: dict[str, dict[str, str]] = {
 TR_EXTRA_TEXT: dict[str, str] = {
     "show_debug_details": "Geliştirici detaylarını göster",
     "delete_document": "Kaldır",
-    "confirm_delete_document": "Bu belge GroundNote içinden kaldırılsın mı?",
-    "delete_confirm": "Evet",
-    "delete_cancel": "Hayır",
+    "confirm_delete_document": "Bu belge kaldırılsın mı?",
+    "delete_confirm": "Kaldır",
+    "delete_cancel": "İptal",
     "document_deleted": "{filename} GroundNote içinden kaldırıldı. Diskteki özgün dosya silinmedi.",
     "operation_busy_question": "Belge işleniyor. Lütfen indeksleme tamamlandıktan sonra soru sorun.",
     "operation_busy_indexing": (

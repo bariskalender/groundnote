@@ -28,6 +28,7 @@ from groundnote.rag.errors import (
 from groundnote.rag.language import resolve_response_language
 from groundnote.rag.models import Citation, RagAnswer, RagContextItem, RagRequest
 from groundnote.rag.prompts import build_prompt
+from groundnote.rag.section_filter import filter_results_for_explicit_sections
 from groundnote.rag.validation import normalize_query
 from groundnote.retrieval.models import RetrievalResponse
 from groundnote.utils import get_logger, safe_log_info, safe_log_warning, sanitize_log_fields
@@ -102,7 +103,11 @@ class RagService:
             )
             self._log_completion(query, answer)
             return answer
-        context_items, context_warnings = select_context(retrieval.results, settings=self.settings)
+        section_filter = filter_results_for_explicit_sections(query, retrieval.results)
+        warnings.extend(section_filter.warnings)
+        context_items, context_warnings = select_context(
+            section_filter.results, settings=self.settings
+        )
         warnings.extend(context_warnings)
         if not context_items:
             answer = self._insufficient_evidence_answer(
@@ -138,12 +143,19 @@ class RagService:
             )
             self._log_completion(query, answer)
             return answer
-        if not _has_plausible_context_overlap(query, context_items):
+        has_context_overlap = _has_plausible_context_overlap(query, context_items)
+        misses_strong_entities = _misses_strong_entities(query, context_items)
+        if not has_context_overlap or misses_strong_entities:
+            warning = (
+                "strong_query_entities_missing"
+                if misses_strong_entities
+                else "context_query_overlap_too_low"
+            )
             answer = self._insufficient_evidence_answer(
                 language=language,
                 retrieved_count=retrieval.returned_count,
                 duration_ms=self._duration(started),
-                warnings=[*warnings, "context_query_overlap_too_low"],
+                warnings=[*warnings, warning],
             )
             self._log_completion(query, answer)
             return answer
@@ -204,13 +216,28 @@ class RagService:
             result_text = self._call_chat(prompt.system_prompt, prompt.user_prompt)
             status, body = parse_grounded_status(result_text)
             cleaned = validate_answer_text(body, allowed_ids=allowed_ids)
+            cleaned = clean_answer_formatting(
+                cleaned,
+                language=language,
+                requested_bilingual=_requests_bilingual_answer(query),
+                allowed_ids=allowed_ids,
+            )
             cleaned, repeated = repair_repetition(cleaned, allowed_ids=allowed_ids)
             if repeated:
                 last_repetition = True
                 if cleaned:
                     cleaned = validate_answer_text(cleaned, allowed_ids=allowed_ids)
+                    cleaned = clean_answer_formatting(
+                        cleaned,
+                        language=language,
+                        requested_bilingual=_requests_bilingual_answer(query),
+                        allowed_ids=allowed_ids,
+                    )
                 else:
                     continue
+            if _contains_quality_failure_marker(cleaned):
+                last_repetition = True
+                continue
             if status == "insufficient":
                 return cleaned, [], attempt, status
             citation_ids = extract_citation_ids(cleaned, allowed_ids)
@@ -310,6 +337,7 @@ class RagService:
 def validate_answer_text(answer: str, *, allowed_ids: set[str]) -> str:
     """Validate and conservatively normalize generated answer text."""
     cleaned = answer.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "").strip()
+    cleaned = _remove_empty_and_citation_only_bullets(cleaned, allowed_ids=allowed_ids)
     if not cleaned:
         raise InvalidChatResponseError("Generated answer was empty.")
     if len(cleaned) > MAX_ANSWER_CHARACTERS:
@@ -333,6 +361,27 @@ def validate_answer_text(answer: str, *, allowed_ids: set[str]) -> str:
     return cleaned
 
 
+def clean_answer_formatting(
+    answer: str,
+    *,
+    language: str,
+    requested_bilingual: bool,
+    allowed_ids: set[str],
+) -> str:
+    """Remove common local-model formatting artifacts without changing grounded facts."""
+    cleaned = _remove_empty_and_citation_only_bullets(answer, allowed_ids=allowed_ids)
+    cleaned = _remove_repeated_answer_headings(cleaned)
+    if not requested_bilingual:
+        cleaned = _remove_unrequested_bilingual_tail(cleaned, language=language)
+    cleaned = strip_unknown_citations(cleaned, allowed_ids).strip()
+    cleaned = _trim_dangling_ending(cleaned)
+    if not cleaned:
+        raise InvalidChatResponseError("Generated answer was empty after formatting cleanup.")
+    if CITATION_RE.sub("", cleaned).strip() == "":
+        raise InvalidChatResponseError("Generated answer contained only citations.")
+    return cleaned
+
+
 def repair_repetition(answer: str, *, allowed_ids: set[str]) -> tuple[str, bool]:
     """Trim repeated tails without exposing malformed local model output."""
     marker = _first_repetition_start(answer)
@@ -351,6 +400,61 @@ def _remove_answer_heading(answer: str) -> str:
         answer,
         flags=re.IGNORECASE,
     ).strip()
+
+
+def _remove_repeated_answer_headings(answer: str) -> str:
+    lines: list[str] = []
+    for line in answer.splitlines():
+        stripped = line.strip()
+        if re.fullmatch(
+            r"(?:answer|cevap|cevabı|cevabi|cevaplar)\s*:?",
+            stripped,
+            re.IGNORECASE,
+        ):
+            continue
+        lines.append(
+            re.sub(
+                r"^\s*(?:answer|cevap|cevabı|cevabi|cevaplar)\s*:\s*",
+                "",
+                line,
+                flags=re.IGNORECASE,
+            )
+        )
+    return "\n".join(lines).strip()
+
+
+def _remove_empty_and_citation_only_bullets(answer: str, *, allowed_ids: set[str]) -> str:
+    cleaned_lines: list[str] = []
+    citation_only = re.compile(
+        rf"^\s*[-*•]?\s*(?:{CITATION_RE.pattern}\s*)+$",
+        flags=re.IGNORECASE,
+    )
+    for line in answer.splitlines():
+        stripped = line.strip()
+        if stripped in {"-", "*", "•", ".", ""}:
+            continue
+        if citation_only.fullmatch(stripped):
+            ids = set(CITATION_RE.findall(stripped))
+            if ids <= allowed_ids:
+                continue
+        cleaned_lines.append(line.rstrip())
+    return "\n".join(cleaned_lines).strip()
+
+
+def _remove_unrequested_bilingual_tail(answer: str, *, language: str) -> str:
+    lines = answer.splitlines()
+    forbidden_heading = re.compile(
+        r"^\s*(?:english|ingilizce|i̇ngilizce)\s*:\s*$"
+        if language == "tr"
+        else r"^\s*(?:türkçe|turkce|turkish)\s*:\s*$",
+        flags=re.IGNORECASE,
+    )
+    kept: list[str] = []
+    for line in lines:
+        if forbidden_heading.fullmatch(line.strip()):
+            break
+        kept.append(line)
+    return "\n".join(kept).strip() or answer.strip()
 
 
 def _trim_dangling_ending(answer: str) -> str:
@@ -679,6 +783,82 @@ def _has_plausible_context_overlap(query: str, context_items: list[RagContextIte
     if code_terms:
         return bool(code_terms & context_terms)
     return True
+
+
+def _misses_strong_entities(query: str, context_items: list[RagContextItem]) -> bool:
+    strong_terms = _strong_query_entities(query)
+    if len(strong_terms) < 2:
+        return False
+    context_terms = _normalize_terms(
+        "\n".join(
+            [
+                *[item.content for item in context_items],
+                *[item.section_title or "" for item in context_items],
+                *[item.source_filename for item in context_items],
+            ]
+        )
+    )
+    missing = strong_terms - context_terms
+    return len(missing) >= 2
+
+
+def _strong_query_entities(query: str) -> set[str]:
+    stopwords = {
+        "about",
+        "answer",
+        "battery",
+        "belge",
+        "belgelerde",
+        "capacity",
+        "cevap",
+        "documents",
+        "fuel",
+        "hakkinda",
+        "hakkında",
+        "hybrid",
+        "icin",
+        "için",
+        "nedir",
+        "nasil",
+        "nasıl",
+        "power",
+        "question",
+        "soru",
+        "the",
+        "what",
+        "where",
+        "which",
+    }
+    raw_terms = re.findall(
+        r"[A-Za-zÇĞİÖŞÜçğıöşü0-9][A-Za-zÇĞİÖŞÜçğıöşü0-9.+-]*",
+        query,
+        flags=re.UNICODE,
+    )
+    strong: set[str] = set()
+    for raw in raw_terms:
+        folded = next(iter(_normalize_terms(raw)), "")
+        if not folded or folded in stopwords:
+            continue
+        if len(folded) >= 3 and (
+            raw[:1].isupper() or any(character.isdigit() for character in raw) or "." in raw
+        ):
+            strong.add(folded)
+    return strong
+
+
+def _requests_bilingual_answer(query: str) -> bool:
+    normalized = " ".join(_normalize_terms(query))
+    return (
+        "english" in normalized
+        and ("turkce" in normalized or "turkish" in normalized)
+        or "ingilizce" in normalized
+        and "turkce" in normalized
+    )
+
+
+def _contains_quality_failure_marker(answer: str) -> bool:
+    normalized = answer.casefold()
+    return "avuncus" in normalized or "throws into the water" in normalized
 
 
 def _content_terms(text: str) -> set[str]:

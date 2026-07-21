@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 7.2.1 complete locally. Phase 8 has not started.
+Phase 7.2.2 complete locally. Phase 8 has not started.
 
 ## Completed Tasks
 
@@ -218,6 +218,22 @@ Phase 7.2.1 complete locally. Phase 8 has not started.
 - Added regression coverage for document removal, document inventory routing, debug-detail default
   visibility, operation-state cleanup, and table caution.
 - Added `docs/phase-7-2-1-real-test-stability.md`.
+
+### Phase 7.2.2
+
+- Added section-title-aware context filtering so questions about a specific retrieved section/item
+  do not mix conflicting nearby sections unless the question explicitly asks for a comparison.
+- Added strong named-entity coverage checks that return insufficient evidence without chat
+  generation when retrieved context does not contain the requested external entities.
+- Hardened generated-answer cleanup for empty bullets, citation-only bullets, duplicate answer
+  headings, unrequested bilingual tails, dangling endings, and malformed-output quality markers.
+- Fixed deterministic Turkish greeting routing for messages such as `merhaba` when answer language
+  is automatic.
+- Changed overlapping question attempts during active operations to show a friendly busy message
+  instead of adding a generic failure message.
+- Shortened the single-document remove confirmation wording.
+- Added `.streamlit/config.toml` headless startup behavior while preserving local-only operation.
+- Added `docs/phase-7-2-2-section-retrieval-ui-stability.md`.
 
 ## Commands Run In Phase 2
 
@@ -435,6 +451,27 @@ Phase 7.2.1 complete locally. Phase 8 has not started.
 - Representative local fixture manual smoke for inventory, delete, invalid/greeting bypasses, and
   MB-like table ambiguity.
 
+## Commands Run In Phase 7.2.2
+
+- Initial application shutdown, port cleanup, Foundry model unload, and governance document checks.
+- Targeted code searches for Streamlit operation state, router language handling, RAG retrieval,
+  prompt, answer validation, and section metadata.
+- `uv run ruff check src/groundnote/rag src/groundnote/ui tests/unit/rag tests/unit/ui`
+- `uv run pytest tests/unit/rag/test_service.py tests/unit/rag/test_phase_7_1_router.py tests/unit/ui/test_state.py -q`
+- `uv sync`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run mypy src`
+- `uv run ruff format src/groundnote/rag/section_filter.py src/groundnote/rag/service.py`
+- `uv run pytest -m "not foundry"`
+- `uv run pytest --cov=groundnote --cov-report=term-missing`
+- `uv run python scripts/check_foundry.py`
+- `uv run python scripts/smoke_ui_pipeline.py`
+- `uv run python scripts/smoke_ui_real.py`
+- Headless Streamlit startup smoke on port 8514, followed by explicit child-process cleanup.
+- Foundry model unload commands for `phi-3.5-mini`, `qwen2.5-0.5b`, and
+  `qwen3-embedding-0.6b`, followed by `foundry status` confirming `0` loaded models.
+
 ## Test Status
 
 - Phase 7 UI unit/integration/Streamlit target: Passed.
@@ -496,6 +533,17 @@ Phase 7.2.1 complete locally. Phase 8 has not started.
 - Phase 7.2.1 representative local fixture smoke: Passed for metadata inventory under 1 ms,
   MB-like table caution in 2.932 ms, and deletion of an old Phases fixture from the index in
   2.721 ms.
+- Phase 7.2.2 targeted router/RAG/UI state checks: Passed, 50 tests passed.
+- Phase 7.2.2 `uv run pytest -m "not foundry"`: Passed, 241 tests passed.
+- Phase 7.2.2 coverage: Passed, 241 tests passed, 78% total coverage.
+- Phase 7.2.2 Foundry check: Passed; Foundry CLI `0.10.2`, server `Ready`, 4 cached candidate
+  models, and `0` loaded models at check time.
+- Phase 7.2.2 fake-provider UI pipeline: Passed.
+- Phase 7.2.2 real Foundry UI smoke: Passed with local embeddings, English/Turkish grounded
+  answers, citations, and insufficient-evidence behavior.
+- Phase 7.2.2 Streamlit startup smoke: Passed on port 8514 with HTTP 200; the spawned child process
+  was explicitly stopped and the port was verified clear.
+- Phase 7.2.2 final Foundry resource cleanup: Passed; `foundry status` reported `0` loaded models.
 - Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
 - Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
 - `uv sync`: Passed.
@@ -566,6 +614,11 @@ Phase 7.2.1 complete locally. Phase 8 has not started.
 - The requested Phase 7.2.1 real document set was not found under the repository, Downloads, or
   Documents search locations during this patch, so representative local fixtures were used for the
   new manual smoke. Real user documents should be re-tested in the UI when available.
+- Phase 7.2.2 section matching is conservative and based on retrieved section titles. If source
+  documents lack useful headings, broad retrieval may still need the local chat model to handle the
+  selected context carefully.
+- Phase 7.2.2 targeted tests cover synthetic section/title separation and explicit comparison. The
+  user should still manually retest the real study documents in the Streamlit UI.
 - A parse failure that occurs before persistence can be retried while the browser still supplies the
   selected upload; after the file is unavailable, the user must select it again.
 - Real Foundry Phase 7.1 smoke timings were measured on a tiny safe fixture:

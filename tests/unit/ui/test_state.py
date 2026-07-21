@@ -13,6 +13,7 @@ from groundnote.ui.state import (
     OperationState,
     OperationStatus,
     begin_operation,
+    can_start_operation,
     clear_operation_flags,
     end_operation,
     initialize_session_state,
@@ -65,6 +66,19 @@ def test_operation_object_starts_and_releases_without_stale_boolean_lock() -> No
 
     assert operation_is_active(state[ACTIVE_OPERATION]) is False
     assert state[UPLOAD_IN_PROGRESS] is False
+
+
+def test_active_operation_blocks_overlapping_work_until_released() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+
+    operation = begin_operation(state, "question")
+
+    assert can_start_operation(state) is False
+
+    end_operation(state, operation)
+
+    assert can_start_operation(state) is True
 
 
 def test_new_chat_state_can_clear_messages_without_touching_filters() -> None:
