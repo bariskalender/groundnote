@@ -23,6 +23,21 @@ class FileTooLargeError(DocumentError):
     user_message = "The file is larger than the configured upload limit."
 
 
+class PdfPageLimitError(DocumentError):
+    error_code = "pdf_page_limit"
+    user_message = "This PDF contains too many pages."
+
+
+class ExtractedTextLimitError(DocumentError):
+    error_code = "extracted_text_limit"
+    user_message = "This document is too large after extraction."
+
+
+class ChunkCountLimitError(DocumentError):
+    error_code = "chunk_count_limit"
+    user_message = "This document creates too many searchable sections."
+
+
 class EmptyDocumentError(DocumentError):
     error_code = "empty_document"
     user_message = "The document is empty."
@@ -31,6 +46,11 @@ class EmptyDocumentError(DocumentError):
 class CorruptDocumentError(DocumentError):
     error_code = "corrupt_document"
     user_message = "The document appears to be corrupted or unreadable."
+
+
+class DocxArchiveSafetyError(CorruptDocumentError):
+    error_code = "docx_archive_safety"
+    user_message = "This DOCX file expands beyond GroundNote's safety limit."
 
 
 class EncryptedDocumentError(DocumentError):

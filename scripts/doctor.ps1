@@ -15,7 +15,7 @@ try {
         Write-Error "uv is not available. Install it with 'winget install --id=astral-sh.uv -e'."
         exit 1
     }
-    & $Uv.Source run python -m groundnote doctor --port $Port
+    & $Uv.Source run --no-dev python -m groundnote doctor --port $Port
     exit $LASTEXITCODE
 }
 finally {

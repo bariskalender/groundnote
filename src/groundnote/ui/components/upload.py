@@ -21,34 +21,23 @@ SUPPORTED_EXTENSIONS = ["pdf", "docx", "txt", "md", "markdown"]
 
 def render_upload_control(
     maximum_size_mb: int,
-    maximum_file_count: int = 10,
-    maximum_total_size_mb: int = 100,
     language: str = "en",
     *,
     disabled: bool = False,
     key: str | None = None,
-) -> list[Any]:
-    """Render a multiple-file selector whose new selections are processed automatically."""
+) -> Any | None:
+    """Render one file selector whose selection is processed automatically."""
     st.caption(t("upload_help", language))
-    st.caption(
-        t("upload_limit", language).format(
-            size=maximum_size_mb,
-            count=maximum_file_count,
-            total=maximum_total_size_mb,
-        )
-    )
-    uploaded_files = st.file_uploader(
+    st.caption(t("upload_limit", language).format(size=maximum_size_mb))
+    uploaded_file = st.file_uploader(
         "PDF, DOCX, TXT, or Markdown",
         type=SUPPORTED_EXTENSIONS,
-        accept_multiple_files=True,
+        accept_multiple_files=False,
         help="OCR is not supported. Use text-based PDFs.",
         disabled=disabled,
         key=key,
     )
-    uploaded = list(uploaded_files or [])
-    if uploaded:
-        st.caption(t("selected_files", language).format(count=len(uploaded)))
-    return uploaded
+    return uploaded_file
 
 
 def render_upload_outcome(outcome: UploadOutcome) -> None:

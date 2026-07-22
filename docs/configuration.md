@@ -23,7 +23,6 @@ Path settings:
 Model settings:
 
 - `GROUNDNOTE_CHAT_MODEL`: default chat model.
-- `GROUNDNOTE_CHAT_MODEL_FALLBACK`: low-resource fallback chat model.
 - `GROUNDNOTE_EMBEDDING_MODEL`: embedding model.
 - `GROUNDNOTE_EMBEDDING_BATCH_SIZE`: ordered local embedding batch size, from `1` through `64`;
   the conservative default is `16`.
@@ -32,18 +31,25 @@ Retrieval, upload, chunking, and generation settings:
 
 - `GROUNDNOTE_TOP_K`
 - `GROUNDNOTE_SIMILARITY_THRESHOLD`
-- `GROUNDNOTE_MAX_UPLOAD_MB`
-- `GROUNDNOTE_MAX_UPLOAD_FILES`: maximum files retained in the in-session queue; default `10`,
-  valid range `1` through `25`.
-- `GROUNDNOTE_MAX_UPLOAD_TOTAL_MB`: combined waiting-buffer limit; default `100`, valid range `1`
-  through `500`, and never lower than the per-file limit.
-- `GROUNDNOTE_CHUNK_TARGET_CHARS`
-- `GROUNDNOTE_CHUNK_MAX_CHARS`
-- `GROUNDNOTE_CHUNK_OVERLAP_CHARS`
-- `GROUNDNOTE_MIN_CHUNK_CHARS`
+- `GROUNDNOTE_MAXIMUM_UPLOAD_SIZE_MB`
+- `GROUNDNOTE_MAXIMUM_PDF_PAGES`: default `1000`; valid range `1-10000`.
+- `GROUNDNOTE_MAXIMUM_EXTRACTED_CHARACTERS`: default `5000000`; valid range
+  `1-50000000`.
+- `GROUNDNOTE_MAXIMUM_DOCUMENT_CHUNKS`: default `10000`; valid range `1-100000`.
+- `GROUNDNOTE_DOCX_MAXIMUM_EXPANDED_SIZE_MB`: default `200`; valid range `1-1024`.
+- `GROUNDNOTE_DOCX_MAXIMUM_COMPRESSION_RATIO`: default `100`; valid range `1-1000`.
+- `GROUNDNOTE_DOCX_MAXIMUM_MEMBER_SIZE_MB`: default `50`; valid range `1-512`.
+- `GROUNDNOTE_DOCX_MAXIMUM_MEMBERS`: default `2000`; valid range `1-10000`.
+- `GROUNDNOTE_CHUNK_TARGET_CHARACTERS`
+- `GROUNDNOTE_CHUNK_MAXIMUM_CHARACTERS`
+- `GROUNDNOTE_CHUNK_OVERLAP_CHARACTERS`
+- `GROUNDNOTE_CHUNK_MINIMUM_CHARACTERS`
 - `GROUNDNOTE_CHUNKING_VERSION`
-- `GROUNDNOTE_MAXIMUM_OUTPUT_TOKENS`
-- `GROUNDNOTE_TEMPERATURE`
+- `GROUNDNOTE_RAG_MAX_OUTPUT_TOKENS`: default `320`.
+
+The document limits stop untrusted expansion and chunk generation before local embedding. Raising
+them increases memory, CPU, and indexing-time risk; `.env.example` keeps the conservative release
+defaults.
 
 ## Defaults
 

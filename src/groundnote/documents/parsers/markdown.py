@@ -18,8 +18,11 @@ class MarkdownParser:
 
     supported_file_type = SupportedFileType.MARKDOWN
 
+    def __init__(self, *, maximum_extracted_characters: int = 5_000_000) -> None:
+        self.text_parser = TextParser(maximum_extracted_characters=maximum_extracted_characters)
+
     def validate_compatible(self, file_path: Path) -> None:
-        TextParser._read_text(file_path)
+        self.text_parser._read_text(file_path)
 
     def parse(
         self,
@@ -30,7 +33,7 @@ class MarkdownParser:
         sha256: str,
         file_size_bytes: int,
     ) -> ParsedDocument:
-        text = TextParser._read_text(file_path)
+        text = self.text_parser._read_text(file_path)
         sections = self._sections_from_markdown(text)
         require_sections(sections)
         return ParsedDocument(

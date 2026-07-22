@@ -40,13 +40,6 @@ class Settings(BaseSettings):
     log_directory: Path | None = None
 
     chat_model: str = "phi-3.5-mini"
-    fallback_chat_model: str = Field(
-        default="qwen2.5-0.5b",
-        validation_alias=AliasChoices(
-            "GROUNDNOTE_FALLBACK_CHAT_MODEL",
-            "GROUNDNOTE_CHAT_MODEL_FALLBACK",
-        ),
-    )
     embedding_model: str = "qwen3-embedding-0.6b"
     embedding_dimension: int = 1024
     embedding_batch_size: int = 16
@@ -69,14 +62,13 @@ class Settings(BaseSettings):
             "GROUNDNOTE_MAX_UPLOAD_MB",
         ),
     )
-    maximum_upload_files: int = Field(
-        default=10,
-        validation_alias=AliasChoices("GROUNDNOTE_MAX_UPLOAD_FILES"),
-    )
-    maximum_upload_total_size_mb: int = Field(
-        default=100,
-        validation_alias=AliasChoices("GROUNDNOTE_MAX_UPLOAD_TOTAL_MB"),
-    )
+    maximum_pdf_pages: int = 1_000
+    maximum_extracted_characters: int = 5_000_000
+    maximum_document_chunks: int = 10_000
+    docx_maximum_expanded_size_mb: int = 200
+    docx_maximum_compression_ratio: float = 100.0
+    docx_maximum_member_size_mb: int = 50
+    docx_maximum_members: int = 2_000
 
     chunk_target_characters: int = Field(
         default=900,
@@ -107,9 +99,6 @@ class Settings(BaseSettings):
         ),
     )
     chunking_version: str = "hybrid-recursive-v1"
-
-    maximum_output_tokens: int = 512
-    temperature: float = 0.2
 
     rag_retrieval_top_k: int = 3
     rag_minimum_score: float = 0.24
@@ -211,18 +200,53 @@ class Settings(BaseSettings):
             raise ValueError("maximum_upload_size_mb must be positive.")
         return value
 
-    @field_validator("maximum_upload_files")
+    @field_validator("maximum_pdf_pages")
     @classmethod
-    def upload_file_count_must_be_bounded(cls, value: int) -> int:
-        if not 1 <= value <= 25:
-            raise ValueError("maximum_upload_files must be between 1 and 25.")
+    def maximum_pdf_pages_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 10_000:
+            raise ValueError("maximum_pdf_pages must be between 1 and 10000.")
         return value
 
-    @field_validator("maximum_upload_total_size_mb")
+    @field_validator("maximum_extracted_characters")
     @classmethod
-    def upload_total_size_must_be_bounded(cls, value: int) -> int:
-        if not 1 <= value <= 500:
-            raise ValueError("maximum_upload_total_size_mb must be between 1 and 500.")
+    def maximum_extracted_characters_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 50_000_000:
+            raise ValueError("maximum_extracted_characters must be between 1 and 50000000.")
+        return value
+
+    @field_validator("maximum_document_chunks")
+    @classmethod
+    def maximum_document_chunks_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 100_000:
+            raise ValueError("maximum_document_chunks must be between 1 and 100000.")
+        return value
+
+    @field_validator("docx_maximum_expanded_size_mb")
+    @classmethod
+    def docx_expanded_size_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 1_024:
+            raise ValueError("docx_maximum_expanded_size_mb must be between 1 and 1024.")
+        return value
+
+    @field_validator("docx_maximum_compression_ratio")
+    @classmethod
+    def docx_compression_ratio_must_be_bounded(cls, value: float) -> float:
+        if not 1.0 <= value <= 1_000.0:
+            raise ValueError("docx_maximum_compression_ratio must be between 1 and 1000.")
+        return value
+
+    @field_validator("docx_maximum_member_size_mb")
+    @classmethod
+    def docx_member_size_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 512:
+            raise ValueError("docx_maximum_member_size_mb must be between 1 and 512.")
+        return value
+
+    @field_validator("docx_maximum_members")
+    @classmethod
+    def docx_member_count_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 10_000:
+            raise ValueError("docx_maximum_members must be between 1 and 10000.")
         return value
 
     @field_validator(
@@ -243,21 +267,7 @@ class Settings(BaseSettings):
             raise ValueError("chunk_overlap_characters must be non-negative.")
         return value
 
-    @field_validator("maximum_output_tokens")
-    @classmethod
-    def maximum_output_tokens_must_be_conservative(cls, value: int) -> int:
-        if not 1 <= value <= 2048:
-            raise ValueError("maximum_output_tokens must be between 1 and 2048.")
-        return value
-
-    @field_validator("temperature")
-    @classmethod
-    def temperature_must_be_valid(cls, value: float) -> float:
-        if not 0.0 <= value <= 2.0:
-            raise ValueError("temperature must be between 0.0 and 2.0.")
-        return value
-
-    @field_validator("chat_model", "fallback_chat_model", "fast_chat_model", "rag_prompt_version")
+    @field_validator("chat_model", "fast_chat_model", "rag_prompt_version")
     @classmethod
     def chat_text_settings_must_not_be_empty(cls, value: str) -> str:
         if not value.strip():
@@ -321,10 +331,6 @@ class Settings(BaseSettings):
         if self.retrieval_candidate_limit < self.rag_max_chunk_count:
             raise ValueError(
                 "retrieval_candidate_limit must be greater than or equal to rag_max_chunk_count."
-            )
-        if self.maximum_upload_total_size_mb < self.maximum_upload_size_mb:
-            raise ValueError(
-                "maximum_upload_total_size_mb must be greater than or equal to the per-file limit."
             )
         if self.database_path is None:
             raise ValueError("database_path could not be resolved.")

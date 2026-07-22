@@ -17,7 +17,7 @@ from groundnote.ui.components.notices import render_message
 from groundnote.ui.components.upload import render_upload_control
 from groundnote.ui.errors import DatabaseBootstrapError, map_exception, safe_failure_message
 from groundnote.ui.formatting import format_duration, format_file_type, safe_filename
-from groundnote.ui.foundry_status import FoundryStatusKind
+from groundnote.ui.foundry_status import FoundryStatusKind, localized_foundry_status
 from groundnote.ui.models import (
     ChatMessageState,
     DocumentSummary,
@@ -27,12 +27,10 @@ from groundnote.ui.models import (
 )
 from groundnote.ui.state import (
     ACTIVE_OPERATION,
-    ACTIVE_UPLOAD_IDENTITY,
     ANSWER_LANGUAGE,
     CHAT_MESSAGES,
     CURRENT_FILTERS,
     LAST_MODEL_ACTIVITY_AT,
-    LAST_UPLOAD_QUEUE_SUMMARY,
     LAST_UPLOAD_RESULT,
     PENDING_CLEAR_DOCUMENTS,
     PENDING_DELETE_DOCUMENT_ID,
@@ -56,25 +54,8 @@ from groundnote.ui.state import (
 )
 from groundnote.ui.text import t
 from groundnote.ui.uploads import (
-    TERMINAL_UPLOAD_STATUSES,
-    UploadFileCountLimitError,
-    UploadItemState,
-    UploadQueueSummary,
-    UploadStatus,
-    UploadTotalSizeLimitError,
-    cancel_waiting_upload,
-    clear_finished_uploads,
-    complete_upload,
-    fail_upload,
-    next_waiting_upload,
-    queue_retry,
-    register_selected_uploads,
-    retained_upload_bytes,
-    start_upload,
-    summarize_upload_queue,
-    update_upload_status,
-    upload_items,
-    waiting_upload_ids,
+    SelectedUpload,
+    register_selected_upload,
 )
 from groundnote.utils import get_logger
 
@@ -163,7 +144,7 @@ def _render_sidebar(
     processing_notice: object,
 ) -> None:
     with st.sidebar:
-        new_chat_allowed = can_start_new_chat(st.session_state)
+        new_chat_allowed = can_start_new_chat(st.session_state) and not _indexing_active(context)
         if st.button(
             t("new_chat", language),
             use_container_width=True,
@@ -175,39 +156,21 @@ def _render_sidebar(
             st.caption(t("new_chat_busy", language))
 
         st.subheader(t("upload_documents", language))
-        document_operation_active = operation_is_active(st.session_state.get(ACTIVE_OPERATION))
+        document_operation_active = operation_is_active(
+            st.session_state.get(ACTIVE_OPERATION)
+        ) or _indexing_active(context)
         uploaded = render_upload_control(
             context.settings.maximum_upload_size_mb,
-            context.settings.maximum_upload_files,
-            context.settings.maximum_upload_total_size_mb,
             language,
             disabled=document_operation_active,
             key=upload_widget_key(st.session_state),
         )
         try:
-            registration = register_selected_uploads(
+            registration = register_selected_upload(
                 st.session_state,
                 uploaded,
                 block_new=document_operation_active,
-                maximum_file_count=context.settings.maximum_upload_files,
-                maximum_total_bytes=context.settings.maximum_upload_total_size_mb * 1024 * 1024,
             )
-        except UploadFileCountLimitError:
-            st.warning(
-                t("upload_file_count_limit", language).format(
-                    count=context.settings.maximum_upload_files
-                )
-            )
-            reset_upload_widget(st.session_state)
-            registration = None
-        except UploadTotalSizeLimitError:
-            st.warning(
-                t("upload_total_size_limit", language).format(
-                    size=context.settings.maximum_upload_total_size_mb
-                )
-            )
-            reset_upload_widget(st.session_state)
-            registration = None
         except Exception as exc:
             message = safe_failure_message(
                 exc,
@@ -219,20 +182,13 @@ def _render_sidebar(
             registration = None
 
         if registration is not None:
-            if registration.blocked_count:
+            if registration.blocked:
                 st.info(t("operation_busy_upload", language))
                 reset_upload_widget(st.session_state)
-            if registration.accepted_count:
-                _notice(
-                    processing_notice,
-                    t("preparing_documents", language).format(count=registration.accepted_count),
-                )
-            if registration.queued and operation_is_active(st.session_state.get(ACTIVE_OPERATION)):
-                st.warning(t("operation_busy_indexing", language))
-        _render_upload_queue(language)
-        if waiting_upload_ids(st.session_state) and can_start_operation(st.session_state):
-            _process_upload_queue(context, language, processing_notice)
-        _clear_notice(processing_notice)
+            if registration.selection is not None:
+                _notice(processing_notice, t("validating_upload", language))
+                _process_selected_upload(context, registration.selection, language)
+            _clear_notice(processing_notice)
 
         _render_document_list(context, language)
         _render_latest_indexing_diagnostics(language)
@@ -241,243 +197,97 @@ def _render_sidebar(
         st.caption(t("local_notice", language))
 
 
-def _process_upload_queue(
+def _process_selected_upload(
     context: ApplicationContext,
+    selection: SelectedUpload,
     language: str,
-    processing_notice: object,
 ) -> None:
-    if not can_start_operation(st.session_state):
+    if not _can_start_operation(context):
         st.info(t("operation_busy_upload", language))
         return
-    queue_ids = waiting_upload_ids(st.session_state)
-    if not queue_ids:
-        return
     _unload_chat_models(context)
-    operation = begin_operation(st.session_state, "upload_queue")
+    operation = begin_operation(
+        st.session_state,
+        "upload",
+        file_identity=selection.identity,
+    )
     succeeded = False
-    started = time.perf_counter()
-    completed_count = 0
-    total_count = len(queue_ids)
-    try:
-        while (item := next_waiting_upload(st.session_state)) is not None:
-            completed_count += 1
-            _notice(
-                processing_notice,
-                t("queue_position", language).format(
-                    current=completed_count,
-                    total=total_count,
-                    filename=item.filename,
-                ),
-            )
-            _process_queue_item(context, item.identity, language)
-        duration_ms = (time.perf_counter() - started) * 1000
-        summary = summarize_upload_queue(
-            st.session_state,
-            duration_ms=duration_ms,
-            identities=queue_ids,
-        )
-        if summary.finished:
-            st.session_state[LAST_UPLOAD_QUEUE_SUMMARY] = summary
-            set_flash_notice(
-                st.session_state,
-                FlashNotice(
-                    message=_queue_summary_message(summary, language),
-                    severity=(
-                        FlashSeverity.WARNING
-                        if summary.failed_count or summary.interrupted_count
-                        else FlashSeverity.SUCCESS
-                    ),
-                ),
-            )
-            reset_upload_widget(st.session_state)
-            succeeded = True
-    finally:
-        cleanup_warnings = unload_local_models(context)
-        end_operation(st.session_state, operation, succeeded=succeeded)
-        if cleanup_warnings:
-            st.warning(t("operation_reset", language))
-    if succeeded:
-        st.rerun()
-
-
-def _process_queue_item(
-    context: ApplicationContext,
-    identity: str,
-    language: str,
-) -> None:
-    item = start_upload(st.session_state, identity)
-    before_ids = _document_ids(context)
+    rerun = False
     with st.status(
-        f"{t('validating_upload', language)}: {item.filename}",
+        f"{t('validating_upload', language)}: {selection.filename}",
         expanded=False,
     ) as status:
 
         def show_stage(stage: UploadStage) -> None:
-            if stage is UploadStage.READY:
-                return
-            upload_status = _upload_status_for_stage(stage)
-            update_upload_status(st.session_state, identity, upload_status)
-            status.write(_upload_status_label(upload_status, language))
+            status.write(_upload_stage_label(stage, language))
 
         last_progress: list[IndexingProgress | None] = [None]
 
         def show_progress(progress: IndexingProgress) -> None:
             last_progress[0] = progress
-            upload_status = _upload_status_for_indexing_stage(progress.stage)
-            update_upload_status(
-                st.session_state,
-                identity,
-                upload_status,
-                current_stage=progress.stage.value,
-                completed_units=progress.completed_units,
-                total_units=progress.total_units,
-            )
             status.write(_indexing_progress_label(progress, language))
 
-        item_started = time.perf_counter()
+        data: bytes | None = None
         try:
-            if item.data is None and item.document_id is not None:
-                context.document_workflow.reindex_document(
-                    item.document_id,
-                    on_progress=show_progress,
-                )
-                terminal_status = UploadStatus.READY
-                document_id = item.document_id
-                duration_ms = (time.perf_counter() - item_started) * 1000
-            elif item.data is not None:
-                outcome = context.document_workflow.process_and_index(
-                    original_filename=item.filename,
-                    data=item.data,
-                    on_stage=show_stage,
-                    on_progress=show_progress,
-                    precomputed_sha256=item.content_sha256,
-                )
-                st.session_state[LAST_UPLOAD_RESULT] = outcome
-                terminal_status = (
-                    UploadStatus.DUPLICATE
-                    if outcome.kind is UploadOutcomeKind.DUPLICATE
-                    else UploadStatus.READY
-                )
-                document_id = outcome.document.document_id
-                duration_ms = outcome.duration_ms
-            else:
-                raise RuntimeError("The waiting queue item has no safe retry source.")
-            complete_upload(
-                st.session_state,
-                identity,
-                status=terminal_status,
-                document_id=document_id,
-                duration_ms=duration_ms,
+            data = selection.data
+            outcome = context.document_workflow.process_and_index(
+                original_filename=selection.filename,
+                data=data,
+                on_stage=show_stage,
+                on_progress=show_progress,
+                precomputed_sha256=selection.content_sha256,
+            )
+            st.session_state[LAST_UPLOAD_RESULT] = outcome
+            terminal_label = (
+                t("duplicate", language)
+                if outcome.kind is UploadOutcomeKind.DUPLICATE
+                else t("ready", language)
             )
             status.update(
                 label=(
-                    f"{_upload_status_label(terminal_status, language)}: "
-                    f"{item.filename} · {format_duration(duration_ms)}"
+                    f"{terminal_label}: "
+                    f"{selection.filename} · {format_duration(outcome.duration_ms)}"
                 ),
                 state="complete",
                 expanded=False,
             )
+            succeeded = True
+            set_flash_notice(
+                st.session_state,
+                FlashNotice(message=terminal_label, severity=FlashSeverity.SUCCESS),
+            )
             _mark_model_activity()
+            rerun = True
         except Exception as exc:
+            original_error = exc
             message = safe_failure_message(
-                exc,
+                original_error,
                 logger=get_logger(__name__),
                 event="ui_document_operation_failed",
                 language=language,
             )
-            fail_upload(
-                st.session_state,
-                identity,
-                message=message,
-                document_id=item.document_id or _new_failed_document_id(context, before_ids),
-                duration_ms=(time.perf_counter() - item_started) * 1000,
-            )
             failed_stage = last_progress[0].stage if last_progress[0] is not None else None
             status.update(
-                label=_indexing_failure_label(item.filename, failed_stage, language),
+                label=_indexing_failure_label(selection.filename, failed_stage, language),
                 state="error",
                 expanded=False,
             )
-            render_message(message)
-        except BaseException:
-            message = map_exception(RuntimeError("Indexing was interrupted."), language)
-            fail_upload(
+            set_flash_notice(
                 st.session_state,
-                identity,
-                message=message,
-                document_id=item.document_id or _new_failed_document_id(context, before_ids),
-                interrupted=True,
-                duration_ms=(time.perf_counter() - item_started) * 1000,
+                FlashNotice(
+                    title=message.title,
+                    message=message.message,
+                    remediation=message.remediation,
+                    severity=FlashSeverity.ERROR,
+                ),
             )
-            raise
-
-
-def _render_upload_queue(language: str) -> None:
-    items = upload_items(st.session_state)
-    if not items:
-        return
-    with st.expander(t("upload_queue", language), expanded=True):
-        active_identity = st.session_state.get(ACTIVE_UPLOAD_IDENTITY)
-        waiting_count = sum(item.status is UploadStatus.WAITING for item in items)
-        st.caption(
-            t("queue_overview", language).format(
-                total=len(items),
-                waiting=waiting_count,
-            )
-        )
-        st.caption(t("queue_session_notice", language))
-        for position, item in enumerate(items, start=1):
-            with st.container(border=True):
-                st.caption(
-                    t("queue_item_position", language).format(
-                        current=position,
-                        total=len(items),
-                        filename=safe_filename(item.filename),
-                    )
-                )
-                status_text = _upload_status_label(item.status, language)
-                if item.completed_units is not None and item.total_units is not None:
-                    status_text = f"{status_text}: {item.completed_units} / {item.total_units}"
-                if item.identity == active_identity:
-                    status_text = f"{t('processing', language)} · {status_text}"
-                st.caption(status_text)
-                if item.duration_ms is not None:
-                    st.caption(format_duration(item.duration_ms))
-                if item.status is UploadStatus.WAITING:
-                    if st.button(
-                        t("cancel_waiting_item", language),
-                        key=f"cancel-queued-{item.identity}",
-                        use_container_width=True,
-                    ):
-                        cancel_waiting_upload(st.session_state, item.identity)
-                        st.rerun()
-                elif item.status in {UploadStatus.FAILED, UploadStatus.INTERRUPTED}:
-                    if item.message is not None:
-                        render_message(item.message)
-                    if st.button(
-                        t("retry", language),
-                        key=f"retry-queued-{item.identity}",
-                        use_container_width=True,
-                        disabled=not item.retry_available,
-                    ):
-                        queue_retry(st.session_state, item.identity)
-                        st.rerun()
-                    if not item.retry_available:
-                        st.caption(t("reselect_retry", language))
-        if st.session_state.get(SHOW_DEBUG_DETAILS):
-            st.caption(
-                t("queue_memory_details", language).format(
-                    waiting=waiting_count,
-                    bytes=retained_upload_bytes(st.session_state),
-                )
-            )
-        if any(item.status in TERMINAL_UPLOAD_STATUSES for item in items) and st.button(
-            t("clear_queue_results", language),
-            key="clear-upload-queue-results",
-            use_container_width=True,
-        ):
-            clear_finished_uploads(st.session_state)
-            st.rerun()
+            rerun = True
+        finally:
+            data = None
+            end_operation(st.session_state, operation, succeeded=succeeded)
+            reset_upload_widget(st.session_state)
+    if rerun:
+        st.rerun()
 
 
 def _render_document_list(
@@ -498,11 +308,7 @@ def _render_document_list(
         )
         return
 
-    session_items = upload_items(st.session_state)
-    item_by_document = {
-        item.document_id: item for item in session_items if item.document_id is not None
-    }
-    if not documents and not session_items:
+    if not documents:
         st.caption(t("no_documents", language))
         return
 
@@ -511,52 +317,32 @@ def _render_document_list(
         st.caption(t("indexed_documents", language))
 
     for document in documents[:20]:
-        item = item_by_document.get(document.document_id)
-        _render_document_row(context, document, item, language)
-
-    represented = {document.document_id for document in documents}
-    for item in session_items:
-        if item.document_id in represented and item.status != UploadStatus.DUPLICATE:
-            continue
-        if item.status == UploadStatus.READY:
-            continue
-        _render_upload_item_row(context, item, language)
+        _render_document_row(context, document, language)
 
 
-def _render_upload_item_row(
+def _render_document_row(
     context: ApplicationContext,
-    item: UploadItemState,
+    document: DocumentSummary,
     language: str,
 ) -> None:
     filename_column, status_column, action_column = st.columns([6, 3, 2])
-    filename_column.caption(f"📄 {item.filename}")
-    status_column.caption(_upload_status_label(item.status, language))
-    if item.status not in {UploadStatus.FAILED, UploadStatus.INTERRUPTED}:
-        return
-    if item.document_id is not None and action_column.button(
-        t("retry", language),
-        key=f"retry-upload-{item.identity}",
-        disabled=not item.retry_available,
-    ):
-        queue_retry(st.session_state, item.identity)
-        st.rerun()
-    if not item.retry_available:
-        action_column.caption(t("reselect_retry", language))
+    filename_column.caption(f"📄 {safe_filename(document.original_filename)}")
+    status_column.caption(_document_status_label(document.status, language))
+    if document.status == DocumentStatus.FAILED:
+        identity = f"document-{document.document_id}"
+        if action_column.button(t("retry", language), key=f"retry-{identity}"):
+            _retry_index_document(context, document, language)
 
 
 def _retry_index_document(
     context: ApplicationContext,
     document: DocumentSummary,
-    item: UploadItemState | None,
     language: str,
 ) -> None:
-    if not can_start_operation(st.session_state):
+    if not _can_start_operation(context):
         st.info(t("operation_busy_indexing", language))
         return
-    identity = item.identity if item is not None else f"document-{document.document_id}"
-    if item is not None:
-        queue_retry(st.session_state, item.identity)
-        start_upload(st.session_state, item.identity)
+    identity = f"document-{document.document_id}"
     operation = begin_operation(st.session_state, "upload", file_identity=identity)
     succeeded = False
     try:
@@ -564,13 +350,6 @@ def _retry_index_document(
             document.document_id,
             force_reindex=document.status == DocumentStatus.FAILED,
         )
-        if item is not None:
-            complete_upload(
-                st.session_state,
-                item.identity,
-                status=UploadStatus.READY,
-                document_id=document.document_id,
-            )
         succeeded = True
     except Exception as exc:
         message = safe_failure_message(
@@ -579,13 +358,6 @@ def _retry_index_document(
             event="ui_document_retry_failed",
             language=language,
         )
-        if item is not None:
-            fail_upload(
-                st.session_state,
-                item.identity,
-                message=message,
-                document_id=document.document_id,
-            )
         render_message(message)
     finally:
         end_operation(st.session_state, operation, succeeded=succeeded)
@@ -642,7 +414,7 @@ def _render_sources_sidebar(context: ApplicationContext, language: str) -> None:
 
 
 def _render_foundry_status(context: ApplicationContext, language: str) -> None:
-    status = context.foundry_status_service.check()
+    status = localized_foundry_status(context.foundry_status_service.check(), language)
     st.caption(f"{t('foundry_status', language)}: {status.label}")
     if status.instruction:
         st.caption(status.instruction)
@@ -681,23 +453,28 @@ def _render_chat_history(context: ApplicationContext, language: str) -> None:
 
 def _render_chat_input(context: ApplicationContext, language: str) -> None:
     current_operation = st.session_state.get(ACTIVE_OPERATION)
-    active = operation_is_active(current_operation)
+    indexing_active = _indexing_active(context)
+    active = operation_is_active(current_operation) or indexing_active
     if active:
-        st.caption(_chat_busy_message(current_operation, language))
+        st.caption(
+            t("chat_busy_indexing", language)
+            if indexing_active
+            else _chat_busy_message(current_operation, language)
+        )
     prompt = st.chat_input(
         t("ask_placeholder", language),
         max_chars=context.settings.rag_max_query_characters,
         disabled=active,
     )
     if prompt:
-        if not can_start_operation(st.session_state):
+        if not _can_start_operation(context):
             st.info(_chat_busy_message(st.session_state.get(ACTIVE_OPERATION), language))
             return
         _answer_prompt(context, prompt, language)
 
 
 def _answer_prompt(context: ApplicationContext, prompt: str, language: str) -> None:
-    if not can_start_operation(st.session_state):
+    if not _can_start_operation(context):
         st.info(_chat_busy_message(st.session_state.get(ACTIVE_OPERATION), language))
         return
     operation = begin_operation(st.session_state, "question")
@@ -792,99 +569,15 @@ def _append_message(message: ChatMessageState) -> None:
     st.session_state[CHAT_MESSAGES] = messages
 
 
-def _document_ids(context: ApplicationContext) -> set[str]:
-    try:
-        return {document.document_id for document in context.document_workflow.list_documents()}
-    except Exception:
-        return set()
-
-
-def _new_failed_document_id(context: ApplicationContext, before_ids: set[str]) -> str | None:
-    try:
-        candidates = [
-            document.document_id
-            for document in context.document_workflow.list_documents()
-            if document.document_id not in before_ids and document.status == DocumentStatus.FAILED
-        ]
-    except Exception:
-        return None
-    return candidates[0] if len(candidates) == 1 else None
-
-
-def _document_by_id(
-    context: ApplicationContext,
-    document_id: str,
-) -> DocumentSummary | None:
-    try:
-        return context.document_workflow.get_document(document_id)
-    except Exception:
-        return None
-
-
-def _upload_status_for_stage(stage: UploadStage) -> UploadStatus:
-    return {
-        UploadStage.SAVING: UploadStatus.SAVING,
-        UploadStage.PROCESSING: UploadStatus.PARSING,
-        UploadStage.INDEXING: UploadStatus.EMBEDDING,
-        UploadStage.FINALIZING: UploadStatus.VERIFYING,
-        UploadStage.READY: UploadStatus.READY,
-    }[stage]
-
-
-def _upload_status_for_indexing_stage(stage: IndexingStage) -> UploadStatus:
-    if stage in {
-        IndexingStage.SAVING_UPLOAD,
-        IndexingStage.SAVING_CHUNKS,
-        IndexingStage.SAVING_VECTORS,
-        IndexingStage.FTS_INDEXING,
-    }:
-        return UploadStatus.SAVING
-    if stage in {
-        IndexingStage.VALIDATING,
-        IndexingStage.HASHING,
-        IndexingStage.DUPLICATE_CHECK,
-    }:
-        return UploadStatus.VALIDATING
-    if stage is IndexingStage.PARSING:
-        return UploadStatus.PARSING
-    if stage is IndexingStage.CHUNKING:
-        return UploadStatus.CHUNKING
-    if stage in {IndexingStage.LOADING_EMBEDDING_MODEL, IndexingStage.EMBEDDING}:
-        return UploadStatus.EMBEDDING
-    return UploadStatus.VERIFYING
-
-
-def _upload_status_label(status: UploadStatus, language: str) -> str:
+def _upload_stage_label(stage: UploadStage, language: str) -> str:
     key = {
-        UploadStatus.WAITING: "waiting",
-        UploadStatus.VALIDATING: "validating_upload",
-        UploadStatus.PARSING: "queue_parsing",
-        UploadStatus.CHUNKING: "queue_chunking",
-        UploadStatus.EMBEDDING: "queue_embedding",
-        UploadStatus.SAVING: "queue_saving",
-        UploadStatus.VERIFYING: "queue_verifying",
-        UploadStatus.PROCESSING: "processing",
-        UploadStatus.INDEXING: "indexing",
-        UploadStatus.READY: "ready",
-        UploadStatus.DUPLICATE: "duplicate",
-        UploadStatus.FAILED: "failed",
-        UploadStatus.INTERRUPTED: "queue_interrupted",
-        UploadStatus.CANCELLED: "queue_cancelled",
-    }[status]
+        UploadStage.SAVING: "validating_upload",
+        UploadStage.PROCESSING: "processing",
+        UploadStage.INDEXING: "indexing",
+        UploadStage.FINALIZING: "indexing",
+        UploadStage.READY: "ready",
+    }[stage]
     return t(key, language)
-
-
-def _queue_summary_message(summary: UploadQueueSummary, language: str) -> str:
-    counts = t("queue_summary_counts", language).format(
-        indexed=summary.indexed_count,
-        duplicate=summary.duplicate_count,
-        failed=summary.failed_count + summary.interrupted_count,
-        cancelled=summary.cancelled_count,
-    )
-    duration = t("queue_summary_duration", language).format(
-        duration=format_duration(summary.duration_ms)
-    )
-    return f"{counts} {duration}"
 
 
 def _document_status_label(status: DocumentStatus, language: str) -> str:
@@ -936,15 +629,14 @@ def _application_context_cache_key() -> str:
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
-def _render_document_row(
+def _render_document_row(  # type: ignore[no-redef]
     context: ApplicationContext,
     document: DocumentSummary,
-    item: UploadItemState | None,
     language: str,
 ) -> None:
     """Render one responsive card with vertically stacked full-width actions."""
     with st.container(border=True):
-        document_action_busy = not can_start_operation(st.session_state)
+        document_action_busy = not _can_start_operation(context)
         st.caption(f"📄 {safe_filename(document.original_filename)}")
         st.caption(_document_status_label(document.status, language))
         if document.status == DocumentStatus.FAILED:
@@ -1008,14 +700,14 @@ def _render_document_row(
         ):
             _reindex_document(context, document, language)
         if document.status == DocumentStatus.FAILED:
-            identity = item.identity if item is not None else f"document-{document.document_id}"
+            identity = f"document-{document.document_id}"
             if st.button(
                 t("retry", language),
                 key=f"retry-{identity}",
                 use_container_width=True,
                 disabled=document_action_busy,
             ):
-                _retry_index_document(context, document, item, language)
+                _retry_index_document(context, document, language)
 
 
 def _delete_document(
@@ -1023,7 +715,7 @@ def _delete_document(
     document: DocumentSummary,
     language: str,
 ) -> None:
-    if not can_start_operation(st.session_state):
+    if not _can_start_operation(context):
         st.info(t("operation_busy_indexing", language))
         return
     operation = begin_operation(st.session_state, "delete")
@@ -1071,7 +763,7 @@ def _reindex_document(
     language: str,
 ) -> None:
     """Regenerate embeddings sequentially for one existing document."""
-    if not can_start_operation(st.session_state):
+    if not _can_start_operation(context):
         st.info(t("operation_busy_indexing", language))
         return
     operation = begin_operation(st.session_state, "reindex")
@@ -1170,7 +862,7 @@ def _render_clear_all_documents(
             t("clear_all_documents", language),
             key="clear-all-documents",
             use_container_width=True,
-            disabled=not can_start_operation(st.session_state),
+            disabled=not _can_start_operation(context),
         ):
             st.session_state[PENDING_CLEAR_DOCUMENTS] = True
             st.rerun()
@@ -1182,7 +874,7 @@ def _render_clear_all_documents(
         t("clear_all_confirm", language),
         key="confirm-clear-all-documents",
         type="primary",
-        disabled=not can_start_operation(st.session_state),
+        disabled=not _can_start_operation(context),
     ):
         _clear_all_documents(context, documents, language)
     if cancel_column.button(t("delete_cancel", language), key="cancel-clear-all-documents"):
@@ -1195,7 +887,7 @@ def _clear_all_documents(
     documents: list[DocumentSummary],
     language: str,
 ) -> None:
-    if not can_start_operation(st.session_state):
+    if not _can_start_operation(context):
         st.info(t("operation_busy_indexing", language))
         return
     operation = begin_operation(st.session_state, "clear_documents")
@@ -1312,11 +1004,19 @@ def _indexing_failure_label(
 
 
 def _chat_busy_message(operation: object, language: str) -> str:
-    if isinstance(operation, OperationState) and operation.operation_type == "upload_queue":
-        return t("chat_busy_queue", language)
     if isinstance(operation, OperationState) and operation.operation_type in {"upload", "reindex"}:
         return t("chat_busy_indexing", language)
     return t("operation_busy_question", language)
+
+
+def _indexing_active(context: ApplicationContext) -> bool:
+    """Use process ownership, not browser session state, for active indexing."""
+    return context.indexing_registry.is_active()
+
+
+def _can_start_operation(context: ApplicationContext) -> bool:
+    """Block UI work while either this session or another refreshed session is indexing."""
+    return can_start_operation(st.session_state) and not _indexing_active(context)
 
 
 def _unload_chat_models(context: ApplicationContext) -> None:

@@ -9,6 +9,7 @@ import pytest
 
 from groundnote.config import Settings
 from groundnote.diagnostics import (
+    REQUIRED_PACKAGES,
     CheckLevel,
     CommandResult,
     run_doctor,
@@ -20,9 +21,11 @@ class FakeRunner:
         self,
         *,
         service_running: bool = True,
+        service_state: str | None = None,
         cached_aliases: set[str] | None = None,
     ) -> None:
         self.service_running = service_running
+        self.service_state = service_state or ("ready" if service_running else "not_running")
         self.cached_aliases = cached_aliases or {
             "phi-3.5-mini",
             "qwen2.5-0.5b",
@@ -43,7 +46,7 @@ class FakeRunner:
                 json.dumps(
                     {
                         "running": self.service_running,
-                        "state": "ready" if self.service_running else "not_running",
+                        "state": self.service_state,
                     }
                 ),
             )
@@ -85,6 +88,13 @@ def _checks_by_name(report: object) -> dict[str, object]:
     return {check.name: check for check in report.checks}  # type: ignore[attr-defined]
 
 
+def test_doctor_dependency_contract_is_runtime_only() -> None:
+    assert {"streamlit", "pydantic", "pydantic_settings", "numpy", "pypdf"} <= set(
+        REQUIRED_PACKAGES
+    )
+    assert {"pytest", "pytest_cov", "ruff", "mypy"}.isdisjoint(REQUIRED_PACKAGES)
+
+
 def test_doctor_reports_healthy_environment(tmp_path: Path) -> None:
     report = run_doctor(
         settings=_settings(tmp_path),
@@ -119,7 +129,7 @@ def test_doctor_reports_missing_foundry_cli(tmp_path: Path) -> None:
     assert not report.ready
 
 
-def test_doctor_reports_service_unavailable_and_restores_initial_state(tmp_path: Path) -> None:
+def test_doctor_reports_stopped_service_as_actionable_warning(tmp_path: Path) -> None:
     runner = FakeRunner(service_running=False)
 
     report = run_doctor(
@@ -132,8 +142,41 @@ def test_doctor_reports_service_unavailable_and_restores_initial_state(tmp_path:
         port=18503,
     )
 
+    assert _checks_by_name(report)["Foundry service"].level is CheckLevel.WARNING
+    assert report.exit_code == 0
+    assert not any("server stop" in " ".join(command) for command in runner.commands)
+    assert not any("cache list" in " ".join(command) for command in runner.commands)
+
+
+def test_doctor_distinguishes_starting_from_ready(tmp_path: Path) -> None:
+    report = run_doctor(
+        settings=_settings(tmp_path),
+        repository_root=Path(__file__).resolve().parents[2],
+        command_runner=FakeRunner(service_running=True, service_state="starting"),
+        executable_finder=_finder,
+        operating_system="Windows",
+        python_version=(3, 11, 0),
+        port=18503,
+    )
+
+    check = _checks_by_name(report)["Foundry service"]
+    assert check.level is CheckLevel.WARNING
+    assert "starting" in check.message.lower()
+
+
+def test_doctor_treats_unhealthy_foundry_service_as_blocking(tmp_path: Path) -> None:
+    report = run_doctor(
+        settings=_settings(tmp_path),
+        repository_root=Path(__file__).resolve().parents[2],
+        command_runner=FakeRunner(service_running=True, service_state="failed"),
+        executable_finder=_finder,
+        operating_system="Windows",
+        python_version=(3, 11, 0),
+        port=18503,
+    )
+
     assert _checks_by_name(report)["Foundry service"].level is CheckLevel.ERROR
-    assert any("server stop" in " ".join(command) for command in runner.commands)
+    assert report.exit_code == 1
 
 
 def test_doctor_reports_missing_required_model(tmp_path: Path) -> None:
@@ -150,7 +193,7 @@ def test_doctor_reports_missing_required_model(tmp_path: Path) -> None:
     )
 
     check = _checks_by_name(report)["Required models"]
-    assert check.level is CheckLevel.ERROR
+    assert check.level is CheckLevel.WARNING
     assert "qwen3-embedding-0.6b" in check.message
 
 
@@ -214,3 +257,22 @@ def test_doctor_output_does_not_expose_sensitive_values(
 
     assert secret not in rendered
     assert str(settings.data_directory) not in rendered
+
+
+def test_doctor_render_does_not_expose_executable_paths(tmp_path: Path) -> None:
+    private_profile = "C:/Users/private-name/AppData/Local/bin"
+
+    def finder(name: str) -> str | None:
+        return f"{private_profile}/{name}.exe"
+
+    report = run_doctor(
+        settings=_settings(tmp_path),
+        repository_root=Path(__file__).resolve().parents[2],
+        command_runner=FakeRunner(),
+        executable_finder=finder,
+        operating_system="Windows",
+        python_version=(3, 11, 0),
+        port=18506,
+    )
+
+    assert private_profile not in report.render()

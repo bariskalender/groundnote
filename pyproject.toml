@@ -1,6 +1,6 @@
 [project]
 name = "groundnote"
-version = "0.9.0"
+version = "1.0.0"
 description = "Private, offline RAG study assistant powered by Microsoft Foundry Local."
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
@@ -16,7 +16,6 @@ dependencies = [
   "structlog",
   "platformdirs",
   "pypdf",
-  "python-docx",
   "python-dotenv",
   "foundry-local-sdk-winml; sys_platform == 'win32'",
   "foundry-local-sdk; sys_platform == 'darwin'",
@@ -31,6 +30,7 @@ dev = [
   "ruff",
   "mypy",
   "types-psutil",
+  "python-docx",
 ]
 
 [build-system]

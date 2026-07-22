@@ -20,7 +20,19 @@ from groundnote import __version__
 from groundnote.config import Settings, load_settings
 
 DEFAULT_PORT = 8501
-REQUIRED_PACKAGES = ("streamlit", "pydantic", "numpy", "openai")
+REQUIRED_PACKAGES = (
+    "streamlit",
+    "pydantic",
+    "pydantic_settings",
+    "numpy",
+    "structlog",
+    "platformdirs",
+    "pypdf",
+    "dotenv",
+    "foundry_local_sdk",
+    "openai",
+    "psutil",
+)
 
 
 class CheckLevel(StrEnum):
@@ -283,68 +295,104 @@ def _foundry_checks(
 
     server_result = runner([foundry_path, "server", "status", "-o", "json"])
     server_data = _json_object(server_result.stdout)
-    initially_running = bool(server_data.get("running"))
-    checks.append(
-        DiagnosticCheck(
+    service_state = str(server_data.get("state", "unknown")).casefold().replace("-", "_")
+    running = server_data.get("running") is True
+    ready = running and service_state in {"ready", "reachable"}
+    stopped = not running and service_state in {"not_running", "stopped"}
+    starting = service_state in {"starting", "initializing"}
+    if ready:
+        service_check = DiagnosticCheck("Foundry service", CheckLevel.OK, "Ready.")
+    elif stopped:
+        service_check = DiagnosticCheck(
             "Foundry service",
-            CheckLevel.OK if initially_running else CheckLevel.ERROR,
-            "Ready."
-            if initially_running
-            else "Not running. Run `foundry server start`, then retry.",
+            CheckLevel.WARNING,
+            "Installed but stopped. The GroundNote launcher will start it when needed.",
         )
-    )
+    elif starting:
+        service_check = DiagnosticCheck(
+            "Foundry service",
+            CheckLevel.WARNING,
+            "Starting; retry readiness checks shortly.",
+        )
+    elif service_state in {"error", "failed", "unavailable", "unhealthy"}:
+        service_check = DiagnosticCheck(
+            "Foundry service",
+            CheckLevel.ERROR,
+            "Installed, but the local service is unavailable or unhealthy.",
+        )
+    elif server_result.returncode != 0 or not server_data:
+        service_check = DiagnosticCheck(
+            "Foundry service",
+            CheckLevel.ERROR,
+            "Service readiness could not be inspected.",
+        )
+    else:
+        service_check = DiagnosticCheck(
+            "Foundry service",
+            CheckLevel.WARNING,
+            "Installed, but service readiness is unknown.",
+        )
+    checks.append(service_check)
 
-    loaded_count = 0
-    if initially_running:
-        status_result = runner([foundry_path, "status", "-o", "json"])
-        status_data = _json_object(status_result.stdout)
-        models_data = status_data.get("models", {})
-        if isinstance(models_data, dict):
-            loaded_count = _safe_int(models_data.get("loaded"))
+    if not ready:
+        checks.append(
+            DiagnosticCheck(
+                "Loaded models",
+                CheckLevel.WARNING,
+                "Not inspected while the Foundry service is not ready.",
+            )
+        )
+        checks.append(
+            DiagnosticCheck(
+                "Required models",
+                CheckLevel.WARNING,
+                "Not inspected while the Foundry service is not ready; no model was loaded.",
+            )
+        )
+        return checks
+
+    status_result = runner([foundry_path, "status", "-o", "json"])
+    status_data = _json_object(status_result.stdout)
+    models_data = status_data.get("models", {})
+    loaded_count = _safe_int(models_data.get("loaded")) if isinstance(models_data, dict) else 0
     checks.append(
         DiagnosticCheck("Loaded models", CheckLevel.OK, f"{loaded_count} model(s) loaded.")
     )
 
-    try:
-        cache_result = runner([foundry_path, "cache", "list", "-o", "json"])
-        cache_data = _json_object(cache_result.stdout)
-        cached_entries = cache_data.get("models", [])
-        aliases = {
-            str(entry.get("alias"))
-            for entry in cached_entries
-            if isinstance(entry, dict) and entry.get("cached") is True
-        }
-        required = (
-            {settings.chat_model, settings.embedding_model} if settings is not None else set()
+    cache_result = runner([foundry_path, "cache", "list", "-o", "json"])
+    cache_data = _json_object(cache_result.stdout)
+    cached_entries = cache_data.get("models", [])
+    aliases = {
+        str(entry.get("alias"))
+        for entry in cached_entries
+        if isinstance(entry, dict) and entry.get("cached") is True
+    }
+    required = {settings.chat_model, settings.embedding_model} if settings is not None else set()
+    fallback = settings.fast_chat_model if settings is not None else None
+    missing = sorted(required - aliases)
+    if cache_result.returncode != 0:
+        checks.append(
+            DiagnosticCheck(
+                "Required models",
+                CheckLevel.WARNING,
+                "The local model cache could not be inspected; no model was downloaded.",
+            )
         )
-        fallback = settings.fallback_chat_model if settings is not None else None
-        missing = sorted(required - aliases)
-        if cache_result.returncode != 0:
-            checks.append(
-                DiagnosticCheck(
-                    "Required models",
-                    CheckLevel.ERROR,
-                    "The local model cache could not be inspected.",
-                )
+    elif missing:
+        checks.append(
+            DiagnosticCheck(
+                "Required models",
+                CheckLevel.WARNING,
+                "Missing cached model aliases: " + ", ".join(missing) + ".",
             )
-        elif missing:
-            checks.append(
-                DiagnosticCheck(
-                    "Required models",
-                    CheckLevel.ERROR,
-                    "Missing cached model aliases: " + ", ".join(missing) + ".",
-                )
-            )
-        else:
-            message = "Required chat and embedding models are cached."
-            level = CheckLevel.OK
-            if fallback and fallback not in aliases:
-                message += f" Optional fallback '{fallback}' is not cached."
-                level = CheckLevel.WARNING
-            checks.append(DiagnosticCheck("Required models", level, message))
-    finally:
-        if not initially_running:
-            runner([foundry_path, "server", "stop"])
+        )
+    else:
+        message = "Required chat and embedding models are cached."
+        level = CheckLevel.OK
+        if fallback and fallback not in aliases:
+            message += f" Optional fallback '{fallback}' is not cached."
+            level = CheckLevel.WARNING
+        checks.append(DiagnosticCheck("Required models", level, message))
     return checks
 
 
@@ -431,3 +479,8 @@ def _safe_int(value: object) -> int:
 
 def _first_safe_line(value: str) -> str:
     return value.strip().splitlines()[0][:120] if value.strip() else ""
+
+
+def sanitize_executable_name(path: str | None) -> str | None:
+    """Return only an executable filename for shareable diagnostic output."""
+    return Path(path).name if path else None

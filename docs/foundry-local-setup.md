@@ -50,7 +50,7 @@ On macOS, GroundNote should use `foundry-local-sdk`, not `foundry-local-sdk-winm
 First-time model downloads require internet access. After the required execution providers and
 model files are cached locally, inference is expected to work offline.
 
-## Phase 1 Verification Commands
+## Verification Commands
 
 ```powershell
 uv run python scripts/check_foundry.py

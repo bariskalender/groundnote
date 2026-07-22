@@ -9,7 +9,7 @@ from groundnote.chunking import ChunkingSettings, DocumentChunker
 from groundnote.chunking.errors import ChunkingError
 from groundnote.chunking.models import ChunkingResult
 from groundnote.config import Settings
-from groundnote.documents import DocumentError, ParsedDocument
+from groundnote.documents import ChunkCountLimitError, DocumentError, ParsedDocument
 from groundnote.documents.hashing import calculate_sha256
 from groundnote.domain import Document, DocumentStatus, SupportedFileType
 from groundnote.services import PreEmbeddingIngestionService
@@ -168,6 +168,35 @@ def test_chunking_failure_rolls_back(tmp_path: Path, initialized_database: Path)
 
     with pytest.raises(ChunkingError):
         service.ingest_file(path, original_filename="notes.txt", allowed_directory=document_dir)
+
+    _assert_empty_database(initialized_database)
+
+
+def test_chunk_limit_is_rejected_before_persistence_or_embedding(
+    tmp_path: Path,
+    initialized_database: Path,
+) -> None:
+    document_dir = tmp_path / "documents"
+    document_dir.mkdir()
+    path = _write(document_dir / "many-chunks.txt", "alpha beta gamma delta " * 100)
+    service = PreEmbeddingIngestionService(
+        settings=Settings(
+            data_directory=tmp_path / "app",
+            maximum_document_chunks=1,
+            chunk_target_characters=40,
+            chunk_maximum_characters=50,
+            chunk_minimum_characters=10,
+            chunk_overlap_characters=0,
+        ),
+        unit_of_work_factory=SQLiteUnitOfWorkFactory(initialized_database),
+    )
+
+    with pytest.raises(ChunkCountLimitError):
+        service.ingest_file(
+            path,
+            original_filename="many-chunks.txt",
+            allowed_directory=document_dir,
+        )
 
     _assert_empty_database(initialized_database)
 

@@ -10,6 +10,7 @@ from groundnote.ai.fakes import FakeChatProvider, FakeEmbeddingProvider
 from groundnote.ai.models import EmbeddingBatchResult
 from groundnote.config import Settings
 from groundnote.documents import (
+    ExtractedTextLimitError,
     ManagedFileCleanupResult,
     ManagedFileCleanupStatus,
     UnsupportedFileTypeError,
@@ -186,6 +187,28 @@ def test_no_file_and_ingestion_failure_stop_before_indexing_and_cleanup(tmp_path
 
     assert context.document_workflow.list_documents() == []
     assert embedding.loaded is False
+    assert context.settings.document_directory is not None
+    assert list(context.settings.document_directory.iterdir()) == []
+
+
+def test_resource_limit_failure_never_loads_model_and_releases_pipeline(tmp_path: Path) -> None:
+    embedding = CountingEmbeddingProvider(dimension=4)
+    context = build_application_context(
+        _settings(tmp_path).model_copy(update={"maximum_extracted_characters": 10}),
+        embedding_provider=embedding,
+        chat_provider=FakeChatProvider(),
+    )
+
+    with pytest.raises(ExtractedTextLimitError):
+        context.document_workflow.process_and_index(
+            original_filename="oversized.txt",
+            data=b"This extracted document text exceeds the configured safety limit.",
+        )
+
+    assert embedding.load_calls == 0
+    assert embedding.loaded is False
+    assert context.indexing_registry.is_active() is False
+    assert context.document_workflow.list_documents() == []
     assert context.settings.document_directory is not None
     assert list(context.settings.document_directory.iterdir()) == []
 

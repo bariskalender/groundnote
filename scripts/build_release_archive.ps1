@@ -14,7 +14,7 @@ try {
         Write-Error "uv is not available. Run scripts/setup_windows.ps1 first."
         exit 1
     }
-    & $Uv.Source run python -m groundnote build-archive --output-directory $OutputDirectory
+    & $Uv.Source run --no-dev python -m groundnote build-archive --output-directory $OutputDirectory
     exit $LASTEXITCODE
 }
 finally {

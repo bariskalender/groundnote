@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from groundnote.config import Settings
 from groundnote.domain import Document, DocumentStatus
 from groundnote.services.indexing import UnitOfWorkFactory
+from groundnote.services.indexing_ownership import ActiveIndexingRegistry
 from groundnote.storage import VectorRepository
 from groundnote.utils import get_logger, safe_log_info
 
@@ -47,22 +48,36 @@ class DocumentIndexIntegrityService:
         *,
         settings: Settings,
         unit_of_work_factory: UnitOfWorkFactory,
+        indexing_registry: ActiveIndexingRegistry | None = None,
     ) -> None:
         self.settings = settings
         self.unit_of_work_factory = unit_of_work_factory
+        if indexing_registry is None:
+            if settings.database_path is None:
+                raise RuntimeError("Database path is not configured.")
+            indexing_registry = ActiveIndexingRegistry(settings.database_path)
+        self.indexing_registry = indexing_registry
         self.logger = get_logger(__name__)
 
     def reconcile(self, *, recover_transient: bool = True) -> IndexRecoveryResult:
         """Mark transient or incomplete indexes retryable in one idempotent transaction."""
         interrupted_count = 0
         incomplete_count = 0
+        active_document_ids = self.indexing_registry.active_document_ids()
+        pipeline_is_active = self.indexing_registry.pipeline_is_active()
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Unit of Work repositories are unavailable.")
             documents = unit_of_work.documents.list_all()
             for document in documents:
+                if document.id in active_document_ids:
+                    continue
                 safe_message: str | None = None
-                if recover_transient and document.status in TRANSIENT_DOCUMENT_STATUSES:
+                if (
+                    recover_transient
+                    and not pipeline_is_active
+                    and document.status in TRANSIENT_DOCUMENT_STATUSES
+                ):
                     safe_message = INTERRUPTED_INDEXING_MESSAGE
                     interrupted_count += 1
                 elif document.status is DocumentStatus.INDEXED and not self._is_complete(

@@ -2,7 +2,7 @@
 
 ## Decision
 
-GroundNote `0.9.0` uses a versioned portable source archive with PowerShell setup and launcher
+GroundNote `1.0.0` uses a versioned portable source archive with PowerShell setup and launcher
 scripts. This is the lowest-risk option while Foundry Local remains preview software and models are
 large, hardware-dependent external assets.
 
@@ -33,12 +33,34 @@ large, hardware-dependent external assets.
 ## Archive contract
 
 `scripts/build_release_archive.ps1` creates `dist/groundnote-<version>.zip` with sorted entries and
-fixed timestamps. Included content is limited to runtime source, locked metadata, safe configuration
-example, Streamlit configuration, user scripts, documentation, changelog, and license.
+fixed timestamps, plus `groundnote-<version>.zip.sha256` containing the lowercase SHA-256 and ZIP
+filename. Included content is limited to runtime source, locked metadata, safe configuration
+example, Streamlit configuration, user scripts, documentation, original demo examples,
+contribution/security guidance, changelog, and license.
 
 The builder rejects invalid versions and excludes `.env`, `.git`, local data, SQLite, documents,
-logs, models, vectors, caches, coverage/build output, and tests. It never reads archive inputs from
-outside the repository root and never includes Foundry model files.
+logs, models, vectors, caches, coverage/build output, tests, ZIPs, and checksum artifacts. It
+rejects allowlisted inputs that resolve outside the repository or cross a symlink/reparse-point
+boundary. Repository-local output is accepted only under the excluded `dist/` directory, so the
+current or a prior release can never include itself. It never includes Foundry model files.
+
+Portable setup uses `uv sync --no-dev`; subsequent release-script `uv run` commands also pass
+`--no-dev`. Developers use `uv sync`, which includes the explicit development group.
+
+## Validation workflow
+
+For each release candidate:
+
+1. build the archive twice from identical source and compare ZIP bytes and SHA-256 sidecars;
+2. verify the sidecar against the ZIP and inspect every member without extracting private data;
+3. extract into an isolated path containing spaces;
+4. run runtime-only setup and the doctor from the extracted copy;
+5. start GroundNote, verify the loopback HTTP health endpoint, and test duplicate launch;
+6. stop the token-scoped GroundNote session and confirm the listener is gone; and
+7. delete the generated archives, extraction directory, temporary data, and runtime metadata.
+
+Generated ZIP and checksum files are never committed. A Git tag or GitHub Release requires separate
+explicit authorization.
 
 ## Future installer gate
 

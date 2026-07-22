@@ -262,7 +262,7 @@ wheels = [
 
 [[package]]
 name = "groundnote"
-version = "0.9.0"
+version = "1.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "foundry-local-sdk", marker = "sys_platform == 'darwin'" },
@@ -274,7 +274,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pypdf" },
-    { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "streamlit" },
     { name = "structlog" },
@@ -285,6 +284,7 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "python-docx" },
     { name = "ruff" },
     { name = "types-psutil" },
 ]
@@ -300,7 +300,6 @@ requires-dist = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pypdf" },
-    { name = "python-docx" },
     { name = "python-dotenv" },
     { name = "streamlit" },
     { name = "structlog" },
@@ -311,6 +310,7 @@ dev = [
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
+    { name = "python-docx" },
     { name = "ruff" },
     { name = "types-psutil" },
 ]

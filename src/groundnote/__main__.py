@@ -8,7 +8,7 @@ from pathlib import Path
 from groundnote import __version__
 from groundnote.bootstrap import initialize_application
 from groundnote.diagnostics import DEFAULT_PORT, run_doctor
-from groundnote.release import archive_members, build_release_archive
+from groundnote.release import archive_members, build_release_archive, checksum_path_for
 
 
 def main() -> int:
@@ -38,7 +38,11 @@ def main() -> int:
     if args.command == "build-archive":
         repository_root = Path(__file__).resolve().parents[2]
         archive = build_release_archive(repository_root, args.output_directory)
-        print(f"Created {archive.name} with {len(archive_members(archive))} files.")
+        checksum = checksum_path_for(archive)
+        print(
+            f"Created {archive.name} with {len(archive_members(archive))} files and "
+            f"{checksum.name}."
+        )
         return 0
     parser.error("Unknown command.")
 

@@ -1,15 +1,19 @@
 """Document validation and parsing package."""
 
 from groundnote.documents.errors import (
+    ChunkCountLimitError,
     CorruptDocumentError,
     DocumentError,
+    DocxArchiveSafetyError,
     DuplicateDocumentError,
     EmptyDocumentError,
     EncodingError,
     EncryptedDocumentError,
+    ExtractedTextLimitError,
     FileTooLargeError,
     NoExtractableTextError,
     ParserNotFoundError,
+    PdfPageLimitError,
     UnsafeFileError,
     UnsupportedFileTypeError,
 )
@@ -38,18 +42,22 @@ from groundnote.documents.validation import (
 
 __all__ = [
     "CorruptDocumentError",
+    "ChunkCountLimitError",
     "DocumentError",
     "DocumentProcessingService",
     "DuplicateDocumentError",
     "DuplicateCheckResult",
     "DuplicateType",
+    "DocxArchiveSafetyError",
     "EmptyDocumentError",
     "EncodingError",
     "EncryptedDocumentError",
+    "ExtractedTextLimitError",
     "FileTooLargeError",
     "ManagedFileCleanupResult",
     "ManagedFileCleanupStatus",
     "NoExtractableTextError",
+    "PdfPageLimitError",
     "ParsedDocument",
     "ParsedSection",
     "ParserNotFoundError",

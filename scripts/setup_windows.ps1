@@ -30,26 +30,26 @@ try {
     Write-Step "uv: $(& $Uv.Source --version)"
     Write-Step "Foundry Local CLI: $(& $Foundry.Source --version)"
     if ($DryRun) {
-        Write-Step "Dry run only; would run uv sync, initialize local directories/database, and run the environment doctor."
+        Write-Step "Dry run only; would run uv sync --no-dev, initialize local directories/database, and run the environment doctor."
         exit 0
     }
 
     Push-Location $ProjectRoot
     try {
         Write-Step "Synchronizing the locked Python environment."
-        & $Uv.Source sync
+        & $Uv.Source sync --no-dev
         if ($LASTEXITCODE -ne 0) {
             throw "uv sync failed. Review the dependency output above."
         }
 
         Write-Step "Preparing local directories and SQLite schema without replacing user data."
-        & $Uv.Source run python -m groundnote prepare
+        & $Uv.Source run --no-dev python -m groundnote prepare
         if ($LASTEXITCODE -ne 0) {
             throw "GroundNote local preparation failed. Review .env.example and retry."
         }
 
         Write-Step "Running the environment doctor. No models will be downloaded or loaded."
-        & $Uv.Source run python -m groundnote doctor --port 8501
+        & $Uv.Source run --no-dev python -m groundnote doctor --port 8501
         if ($LASTEXITCODE -ne 0) {
             throw "Setup completed dependency synchronization, but the environment doctor found a blocking issue."
         }
@@ -58,7 +58,8 @@ try {
         Pop-Location
     }
 
-    Write-Step "Success. Start GroundNote with scripts/start_groundnote.ps1."
+    Write-Step "Success. If Foundry Local is stopped, the GroundNote launcher will start it."
+    Write-Step "Start GroundNote with scripts/start_groundnote.ps1."
     exit 0
 }
 catch {

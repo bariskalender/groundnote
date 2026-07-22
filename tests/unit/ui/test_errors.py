@@ -7,10 +7,13 @@ import pytest
 from groundnote.ai import FoundryProviderError
 from groundnote.documents import (
     CorruptDocumentError,
+    DocxArchiveSafetyError,
     DuplicateDocumentError,
     EncryptedDocumentError,
+    ExtractedTextLimitError,
     FileTooLargeError,
     NoExtractableTextError,
+    PdfPageLimitError,
     UnsupportedFileTypeError,
 )
 from groundnote.embeddings import IndexingError
@@ -27,6 +30,9 @@ from groundnote.ui.errors import MessageSeverity, map_exception
         (EncryptedDocumentError(), "Encrypted PDF", MessageSeverity.WARNING),
         (NoExtractableTextError(), "No readable text", MessageSeverity.WARNING),
         (CorruptDocumentError(), "Unreadable document", MessageSeverity.ERROR),
+        (PdfPageLimitError(), "PDF page limit exceeded", MessageSeverity.WARNING),
+        (ExtractedTextLimitError(), "Extracted text limit exceeded", MessageSeverity.WARNING),
+        (DocxArchiveSafetyError(), "Unsafe DOCX archive", MessageSeverity.WARNING),
         (FoundryProviderError("internal"), "Foundry Local unavailable", MessageSeverity.ERROR),
         (IndexingError("internal"), "Indexing failed", MessageSeverity.ERROR),
         (ChatGenerationError("internal"), "Answer generation failed", MessageSeverity.ERROR),

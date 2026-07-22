@@ -24,7 +24,6 @@ def test_streamlit_application_starts_with_chat_first_sidebar(
     assert not app.exception
     assert app.title[0].value == "GroundNote"
     assert len(app.file_uploader) == 1
-    assert app.file_uploader[0].accept_multiple_files is True
     assert len(app.chat_input) == 1
     assert any(button.label == "New chat" for button in app.button)
     assert not any(button.label == "Process documents" for button in app.button)

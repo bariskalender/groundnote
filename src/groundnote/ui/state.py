@@ -33,13 +33,7 @@ UI_LANGUAGE = "ui_language"
 PERFORMANCE_MODE = "performance_mode"
 ANSWER_LANGUAGE = "answer_language"
 LAST_SUBMITTED_QUESTION = "last_submitted_question"
-UPLOAD_QUEUE = "upload_queue"
-ACTIVE_UPLOAD_IDENTITY = "active_upload_identity"
-COMPLETED_UPLOAD_IDENTITIES = "completed_upload_identities"
-FAILED_UPLOAD_IDENTITIES = "failed_upload_identities"
-UPLOAD_ITEMS = "upload_items"
-UPLOAD_SUBMISSION_IDENTITIES = "upload_submission_identities"
-LAST_UPLOAD_QUEUE_SUMMARY = "last_upload_queue_summary"
+LAST_UPLOAD_SELECTION_TOKEN = "last_upload_selection_token"
 SHOW_DEBUG_DETAILS = "show_debug_details"
 PENDING_DELETE_DOCUMENT_ID = "pending_delete_document_id"
 PENDING_CLEAR_DOCUMENTS = "pending_clear_documents"
@@ -66,13 +60,7 @@ DEFAULT_SESSION_STATE: dict[str, object] = {
     PERFORMANCE_MODE: "Balanced",
     ANSWER_LANGUAGE: "auto",
     LAST_SUBMITTED_QUESTION: None,
-    UPLOAD_QUEUE: [],
-    ACTIVE_UPLOAD_IDENTITY: None,
-    COMPLETED_UPLOAD_IDENTITIES: set(),
-    FAILED_UPLOAD_IDENTITIES: set(),
-    UPLOAD_ITEMS: {},
-    UPLOAD_SUBMISSION_IDENTITIES: [],
-    LAST_UPLOAD_QUEUE_SUMMARY: None,
+    LAST_UPLOAD_SELECTION_TOKEN: None,
     SHOW_DEBUG_DETAILS: False,
     PENDING_DELETE_DOCUMENT_ID: None,
     PENDING_CLEAR_DOCUMENTS: False,
@@ -96,7 +84,6 @@ def clear_operation_flags(state: SessionStateLike) -> None:
     state[INDEXING_IN_PROGRESS] = False
     state[QUESTION_IN_PROGRESS] = False
     state[ACTIVE_OPERATION] = None
-    state[ACTIVE_UPLOAD_IDENTITY] = None
 
 
 class OperationStatus(StrEnum):
@@ -192,10 +179,11 @@ def upload_widget_key(state: SessionStateLike) -> str:
 
 
 def reset_upload_widget(state: SessionStateLike) -> None:
-    """Advance the uploader key after a selection is rejected while busy."""
+    """Advance the uploader key and release the terminal single-selection token."""
     current = getattr(state, "get", lambda _key, _default=None: _default)(UPLOAD_WIDGET_REVISION, 0)
     revision = current if isinstance(current, int) and current >= 0 else 0
     state[UPLOAD_WIDGET_REVISION] = revision + 1
+    state[LAST_UPLOAD_SELECTION_TOKEN] = None
 
 
 def begin_operation(
@@ -212,7 +200,7 @@ def begin_operation(
         file_identity=file_identity,
     )
     state[ACTIVE_OPERATION] = operation
-    if operation_type in {"upload", "upload_queue"}:
+    if operation_type == "upload":
         state[UPLOAD_IN_PROGRESS] = True
     if operation_type == "question":
         state[QUESTION_IN_PROGRESS] = True
@@ -242,8 +230,6 @@ def end_operation(
     state[UPLOAD_IN_PROGRESS] = False
     state[INDEXING_IN_PROGRESS] = False
     state[QUESTION_IN_PROGRESS] = False
-    if operation.operation_type in {"upload", "upload_queue"}:
-        state[ACTIVE_UPLOAD_IDENTITY] = None
 
 
 def recover_stale_operation(state: SessionStateLike) -> bool:
@@ -269,7 +255,6 @@ def recover_stale_operation(state: SessionStateLike) -> bool:
     state[UPLOAD_IN_PROGRESS] = False
     state[INDEXING_IN_PROGRESS] = False
     state[QUESTION_IN_PROGRESS] = False
-    state[ACTIVE_UPLOAD_IDENTITY] = None
     return True
 
 

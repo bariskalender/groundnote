@@ -15,6 +15,7 @@ from groundnote.retrieval.errors import RetrievalError
 from groundnote.retrieval.filters import make_semantic_query
 from groundnote.retrieval.models import RetrievalResponse, RetrievalResult, SemanticQuery
 from groundnote.retrieval.similarity import cosine_similarity_scores
+from groundnote.services.indexing_ownership import ActiveIndexingRegistry
 from groundnote.storage import (
     LexicalChunkMatch,
     SearchableChunkEmbedding,
@@ -34,10 +35,12 @@ class SemanticRetrievalService:
         settings: Settings,
         connection_factory: SQLiteConnectionFactory,
         embedding_service: EmbeddingService,
+        indexing_registry: ActiveIndexingRegistry | None = None,
     ) -> None:
         self.settings = settings
         self.connection_factory = connection_factory
         self.embedding_service = embedding_service
+        self.indexing_registry = indexing_registry
         self.logger = get_logger(__name__)
 
     def search(
@@ -65,6 +68,17 @@ class SemanticRetrievalService:
     def search_query(self, query: SemanticQuery) -> RetrievalResponse:
         """Search with a prevalidated query."""
         started = time.perf_counter()
+        if self.indexing_registry is not None and self.indexing_registry.is_active():
+            return RetrievalResponse(
+                query=query,
+                results=[],
+                candidate_count=0,
+                returned_count=0,
+                embedding_model=self.settings.embedding_model,
+                duration_ms=_elapsed_ms(started),
+                warnings=["indexing_active"],
+                stage_timings_ms={},
+            )
         embedding_started = time.perf_counter()
         try:
             self.embedding_service.load()

@@ -1,871 +1,189 @@
-# Project State
+# GroundNote Project State
 
-## Current Phase
+## Current Release
 
-Phase 9.1C complete locally. GroundNote now owns a bounded in-session multi-file upload queue with
-deterministic sequential indexing, safe per-file progress/failure handling, rerun deduplication,
-bounded waiting buffers, localized summaries, and final model cleanup. Validation and real Foundry
-measurements passed. Focused local commits were created and nothing was pushed.
+- Target version: `1.0.0`
+- Current phase: Phase 10 — final portfolio, documentation, and publication release
+- Phase 10 status: Complete
+- Branch: `main`
+- Inference: Microsoft Foundry Local only; no cloud fallback
+- Primary platform: Windows 11
 
-## Completed Tasks
+The 1.0.0 publication scope contains the manually validated Phase 9 correctness, single-file/F5
+ownership, document-safety, diagnostics, setup, launcher, and deterministic release changes plus
+the Phase 10 publication work. The user authorized one release commit and a normal push to `main`
+after validation; no tag or GitHub Release is authorized.
 
-### Phase 0
+## Implemented Product
 
-- Created the src-layout repository structure.
-- Added governance documents, dependency configuration, quality tooling, and a minimal
-  Streamlit application shell.
-- Added a smoke test that imports the package.
+### Documents and Storage
 
-### Phase 1
+- Supports PDF, DOCX, TXT, and Markdown.
+- Validates file names, extensions, signatures, compressed size, and format-specific resource
+  limits before local embedding.
+- Uses SHA-256 exact duplicate detection and collision-resistant managed filenames.
+- Preserves PDF page numbers and DOCX/Markdown section metadata where available.
+- Stores document metadata, chunks, FTS5 rows, and normalized finite float32 embedding BLOBs in
+  SQLite through parameterized repositories and explicit Unit of Work transactions.
+- Removes only validated GroundNote-managed copies; original selected files and unrelated files are
+  never deletion targets.
 
-- Installed and verified Microsoft Foundry Local CLI `0.10.2`.
-- Installed and verified `foundry-local-sdk-winml` `1.2.3`.
-- Added provider-neutral chat and embedding interfaces.
-- Added Foundry Local chat and embedding provider wrappers.
-- Benchmarked `phi-3.5-mini`, `qwen2.5-0.5b`, and `qwen3-embedding-0.6b`.
+### Indexing and Integrity
 
-### Phase 2
+- Uses deterministic hybrid recursive chunking and bounded ordered embedding batches.
+- Keeps local model inference outside SQLite write transactions.
+- Requires complete chunks, compatible embeddings, document model metadata, and one valid FTS row
+  per chunk before committing Ready/`INDEXED`.
+- Reconciles interrupted or incomplete indexes to a non-searchable retryable state at bootstrap.
+- Uses database-scoped process-local ownership so browser refreshes preserve genuinely active work
+  and a true process restart recovers stale transient records.
+- Accepts one file at a time; there is no background upload queue or worker.
 
-- Added typed settings with `pydantic-settings` and `platformdirs`.
-- Added explicit directory initialization without import-time filesystem writes.
-- Added privacy-aware structured logging helpers.
-- Added domain models for documents, chunks, retrieval results, and answers.
-- Added SQLite connection management with foreign keys, row factory, and busy timeout.
-- Added versioned migration runner and `001_initial.sql`.
-- Added `documents`, `document_chunks`, `application_metadata`, and `schema_migrations` tables.
-- Added float32 embedding BLOB serialization and deserialization utilities.
-- Added document and vector repository interfaces and SQLite implementations.
-- Added lightweight SQLite Unit of Work with explicit commit and rollback behavior.
-- Added application bootstrap for settings, logging, directory creation, and migrations.
-- Updated the minimal Streamlit shell to run safe bootstrap and show initialization status.
-- Added configuration and database schema documentation.
+### Retrieval and RAG
 
-### Phase 3
-
-- Added secure validation for PDF, DOCX, TXT, and Markdown files.
-- Added safe display filename normalization and UUID-prefixed stored filename generation.
-- Added streaming SHA-256 hashing for original file bytes.
-- Added exact duplicate pre-checking through the existing document repository contract.
-- Added parser-neutral `ParsedDocument`, `ParsedSection`, `ValidationResult`, and
-  `DuplicateCheckResult` models.
-- Added PDF parsing with page-by-page extraction, 1-based page numbers, blank-page warnings,
-  encrypted PDF rejection, corrupted PDF rejection, and scanned/image-only limitations.
-- Added DOCX parsing for headings, paragraphs, list text, and simple table text.
-- Added TXT parsing for UTF-8 and UTF-8 with BOM with binary-looking file rejection.
-- Added Markdown parsing with heading sections, lists, code blocks, Unicode, and inert HTML text.
-- Added a parser registry and document processing service.
-- Added safe uploaded-byte writing helper for future UI integration.
-- Added supported-document and document-processing documentation.
-
-### Phase 4
-
-- Added a dedicated `groundnote.chunking` package with provider-neutral contracts and models.
-- Added validated chunking settings with `hybrid-recursive-v1` as the MVP default version.
-- Added deterministic hybrid recursive chunking with paragraph, sentence, whitespace, and hard
-  character fallbacks.
-- Added lightweight English and Turkish sentence splitting heuristics without NLP dependencies.
-- Added overlap between compatible chunks while avoiding PDF page and unrelated heading crossings.
-- Added safe short-fragment merging and warnings for unavoidable undersized chunks.
-- Added source filename, file type, page, heading, source order, chunking version, warnings, and
-  approximate token metadata.
-- Added transaction-safe pre-embedding ingestion that persists document records and chunk rows with
-  null embedding fields.
-- Added a SQLite migration for chunk source metadata.
-- Added chunking and pre-embedding ingestion documentation.
-
-### Phase 5
-
-- Added embedding configuration for model, dimension, dtype, batch size, version, top-k, candidate
-  limit, and minimum score.
-- Added normalized float32 embedding validation and embedding service wrappers.
-- Added SQLite embedding metadata migration for document and chunk rows.
-- Extended vector repository behavior for saving, clearing, loading, filtering, and counting
-  indexed embeddings.
-- Added transaction-safe document indexing and force re-index foundations.
-- Added NumPy cosine-similarity semantic retrieval with deterministic ranking.
-- Added document ID, file type, page number, score threshold, top-k, and candidate limit filters.
-- Added retrieval results with filename, file type, page, section, source order, score, and safe
-  metadata.
-- Fixed Foundry Local manager reuse for the installed preview SDK singleton behavior.
-- Added embedding/indexing and semantic retrieval documentation.
-
-### Phase 6
-
-- Added a dedicated `groundnote.rag` package for single-turn grounded answer generation.
-- Added typed RAG settings for retrieval limits, context limits, generation limits, prompt version,
-  citation requirements, and maximum query length.
-- Connected semantic retrieval to local Foundry chat generation through provider interfaces.
-- Added bounded context selection with stable citation IDs such as `S1`, `S2`, and `S3`.
-- Added prompt-injection defenses with separated system/user prompts and explicitly delimited
-  untrusted retrieved context.
-- Added citation formatting and validation based only on trusted retrieval metadata.
-- Added deterministic insufficient-evidence responses in Turkish and English.
-- Added Turkish and English response-language handling with explicit override support.
-- Added a loopback-only local Foundry daemon fallback for chat model loading when direct preview SDK
-  loading fails.
-- Added RAG unit, integration, privacy, prompt-safety, citation, and fake-provider pipeline tests.
-- Added RAG generation, prompt-safety, and citations/language documentation.
-
-### Pre-Phase 7 UI Readiness Audit
-
-- Audited application composition, Streamlit rerun readiness, service boundaries, error behavior,
-  upload lifecycle, document processing, indexing, retrieval, RAG generation, citations, privacy,
-  logging, SQLite concurrency, settings, dependencies, and security posture.
-- Added `docs/audits/pre-phase-7-ui-readiness-audit.md`.
-- Fixed indexing transaction duration so local embedding model loading and generation run outside
-  SQLite write transactions.
-- Added a regression test proving a separate SQLite write can complete while fake embedding
-  generation is running.
-- Updated indexing documentation to describe the short-transaction strategy and `FAILED` indexing
-  behavior.
-
-### Phase 7
-
-- Replaced the minimal shell with a wide Streamlit application containing Documents and Ask
-  GroundNote views.
-- Added an explicit application context for settings, database factories, Foundry providers,
-  ingestion, indexing, retrieval, RAG, status checking, and UI workflows without startup model
-  loading.
-- Added one-file PDF, DOCX, TXT, and Markdown upload confirmation with aligned 50 MB Streamlit and
-  backend limits.
-- Added safe local uploaded-byte writing, exact duplicate presentation and cleanup, parsing,
-  chunking, persistence, local embedding indexing, and safe success summaries.
-- Ensured the persisted stored filename matches the actual collision-resistant local upload file.
-- Added user-safe document status summaries and read-only refresh behavior.
-- Added indexed-document and file-type filters, single-turn chat input, grounded Markdown answers,
-  trusted structured citations, and insufficient-evidence notices.
-- Added a conservative conversion from explicit model evidence refusals to deterministic
-  citation-free insufficient-evidence answers.
-- Added controlled Streamlit session state without bytes, vectors, model instances, connections,
-  transactions, or persistent conversation history.
-- Added safe Foundry service status reporting without automatic service start, model loading, or
-  download.
-- Made model unload failures warning-only after successful embedding or chat operations so cleanup
-  issues do not corrupt indexed state or valid answers.
-- Added UI unit, integration, Streamlit AppTest, fake-provider pipeline, and real local Foundry smoke
-  coverage.
-- Added Streamlit interface and demonstration workflow documentation.
-
-### Phase 7.1
-
-- Fixed retrieval starvation by removing the pre-scoring SQL candidate limit.
-- Added SQLite FTS5 lexical search, hybrid ranking, heading/numbered-term boosts, conservative
-  typo-tolerant expansion, and adjacent-context support.
-- Added deterministic greeting, thanks, and app-help routing that bypasses retrieval and model
-  loading.
-- Added a supported/insufficient RAG response contract and stronger citation-free insufficient
-  evidence handling.
-- Changed the interactive default to warm local models after first use, with Fast and Memory saver
-  performance modes and manual model unload.
-- Rebuilt Streamlit into a chat-first interface with sidebar upload, source filters, Turkish and
-  English UI text, multiple-file upload, New chat, session-only history, compact citations, and
-  recoverable operation state.
-- Added `docs/phase-7-1-stabilization.md`.
-
-### Phase 7.1.1
-
-- Replaced cached stdout-bound Structlog logging with idempotent standard-library integration and
-  best-effort failure-path logging that preserves the original exception.
-- Added a UTF-8 rotating local log handler that closes the file after every record, preventing stale
-  Streamlit streams and Windows file locks.
-- Disabled detailed Streamlit browser exceptions and expanded localized safe error mapping.
-- Removed the manual document-processing button and permanent indexing administration panels.
-- Added automatic sequential upload processing with stable identities, rerun protection, duplicate
-  skipping, and per-file failure isolation. Phase 9.1C later added one bounded in-session byte
-  buffer per waiting queue item and releases it at every terminal outcome.
-- Added compact document statuses and inline retry that safely reuses persisted document and chunk
-  identities when possible.
-- Moved language, performance, answer-language, and model lifecycle controls into an upper-right
-  gear popover.
-- Hardened operation state with IDs, timestamps, terminal status, stale recovery, and `try/finally`
-  cleanup.
-- Added Windows logging, automatic upload, corrupt-file continuation, UI state, and Streamlit
-  AppTest regressions.
-- Updated the Streamlit, indexing, demonstration, stabilization, README, roadmap, state, and
-  decision documentation.
-
-### Phase 7.2
-
-- Added deterministic router handling for empty, unclear, greeting, thanks, help, no-document, and
-  processing-document states before retrieval or model calls.
-- Kept short automotive and technical terms such as `W123`, `NVH`, `CRC`, `VIN`, and `API`
-  eligible for retrieval.
-- Tightened the grounded RAG prompt to `grounded-rag-v2` with compact citations, natural Turkish
-  guidance, repetition avoidance, and chassis/body-code versus engine-code separation.
-- Added repeated-word, repeated-phrase, repeated-citation, low-diversity-tail, and excessive-length
-  answer protection with local trimming and one stricter regeneration attempt.
-- Added deterministic low-confidence retrieval shortcut that skips chat generation and returns
-  insufficient evidence.
-- Reduced default local RAG context/output budgets for latency.
-- Added loaded-state tracking in `EmbeddingService` so warm sessions do not repeatedly load the
-  embedding provider for sequential uploads and retrieval bursts.
-- Removed normal-flow technical citation details and kept compact trusted source labels.
-- Improved image-only PDF/OCR limitation messaging without adding OCR.
-- Added `docs/phase-7-2-optimization.md`.
-
-### Phase 7.2.1
-
-- Added minimal confirmed single-document removal from the Streamlit document list.
-- Deleted document rows, chunks, embeddings, and FTS rows transactionally without deleting user
-  source files from disk.
-- Added metadata-based document inventory and grouping answers that skip retrieval and chat model
+- Combines SQLite FTS5 lexical search with NumPy cosine similarity over local embeddings.
+- Applies document/type filters, heading and numbered-term boosts, conservative typo expansion,
+  adjacent context, section/title filtering, and named-entity evidence checks.
+- Treats retrieved document text as untrusted evidence inside bounded prompts.
+- Generates through Foundry Local and validates citation IDs against trusted retrieval metadata.
+- Returns citation-free English/Turkish insufficient-evidence responses rather than fabricating an
+  answer.
+- Routes greetings, invalid input, help, and document inventory locally without unnecessary model
   calls.
-- Added a disabled-by-default debug details toggle while keeping compact sources visible.
-- Added normal-flow operation guards so indexing and answer generation are not started together.
-- Added mode-aware idle cleanup: Fast keeps models warm longer, Balanced unloads after a short idle
-  TTL, and Memory saver unloads after each operation.
-- Unloaded chat models before indexing when safe to reduce avoidable RAM overlap.
-- Increased the default RAG output budget to 320 tokens while strengthening concise, complete
-  answer prompting.
-- Added local cleanup for generic answer headings, dangling endings, and MB-like table/numeric
-  ambiguity.
-- Added regression coverage for document removal, document inventory routing, debug-detail default
-  visibility, operation-state cleanup, and table caution.
-- Added `docs/phase-7-2-1-real-test-stability.md`.
 
-### Phase 7.2.2
+### Streamlit Interface
 
-- Added section-title-aware context filtering so questions about a specific retrieved section/item
-  do not mix conflicting nearby sections unless the question explicitly asks for a comparison.
-- Added strong named-entity coverage checks that return insufficient evidence without chat
-  generation when retrieved context does not contain the requested external entities.
-- Hardened generated-answer cleanup for empty bullets, citation-only bullets, duplicate answer
-  headings, unrequested bilingual tails, dangling endings, and malformed-output quality markers.
-- Fixed deterministic Turkish greeting routing for messages such as `merhaba` when answer language
-  is automatic.
-- Changed overlapping question attempts during active operations to show a friendly busy message
-  instead of adding a generic failure message.
-- Shortened the single-document remove confirmation wording.
-- Added `.streamlit/config.toml` headless startup behavior while preserving local-only operation.
-- Added `docs/phase-7-2-2-section-retrieval-ui-stability.md`.
+- Chat-first English/Turkish interface with one-file automatic synchronous upload.
+- Real indexing stages, Ready status, duplicate handling, retry, and privacy-safe errors.
+- Knowledge Base with safe metadata, per-document re-index, confirmed remove, and clear-all.
+- Source filters, New chat, session-only conversation messages, and no persistent chat history.
+- Balanced, Fast, and Memory saver modes with explicit GroundNote-owned model cleanup.
+- Chat and document mutations are blocked while indexing is active.
+- Technical details are hidden unless the user explicitly enables the debug toggle.
 
-## Commands Run In Phase 2
+### Safety and Release Tooling
 
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff check . --fix`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest -m "not foundry"`
-- `uv run pytest --cov=groundnote --cov-report=term-missing`
-- `uv run streamlit run src/groundnote/app.py`
+- Default limits: 50 MB upload, 1,000 PDF pages, 5,000,000 extracted characters, 10,000 chunks,
+  200 MB DOCX expansion, 50 MB per member, 100:1 compression ratio, and 2,000 members.
+- DOCX parsing validates untrusted ZIP metadata and reads only bounded required XML without
+  filesystem extraction.
+- Logs and diagnostics exclude full documents, questions, prompts, embeddings, secrets, and raw
+  local paths.
+- Runtime-only idempotent Windows setup, doctor, loopback launcher, token/PID/port-scoped stop, and
+  token-scoped failure cleanup are implemented.
+- Portable release building is deterministic, link/path bounded, private-data allowlisted, and
+  accompanied by a filename-only SHA-256 sidecar.
 
-## Commands Run In Phase 3
+## Model Configuration
 
-- `uv sync`
-- `uv run pytest tests/unit/documents tests/integration/documents`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest -m "not foundry"`
-- `uv run pytest --cov=groundnote --cov-report=term-missing`
-- `uv run python scripts/check_foundry.py`
-- `uv run streamlit run src/groundnote/app.py`
+- Default chat model: `phi-3.5-mini`
+- Low-resource chat model: `qwen2.5-0.5b`
+- Embedding model: `qwen3-embedding-0.6b`
+- Embedding dimension: 1,024
+- Embedding dtype: `float32`
+- Default embedding batch size: 16
 
-## Commands Run In Phase 4
+The verified local catalog selected CPU execution-provider variants. No GPU/NPU acceleration claim
+is made.
 
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest tests/unit/chunking tests/integration/ingestion -q --basetemp .local-data/pytest-phase4-target`
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase4-full`
-- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase4-cov`
-- `uv run python scripts/check_foundry.py`
-- `foundry status`
-- Targeted chunking and pre-embedding ingestion smoke test.
-- Headless Streamlit startup smoke test.
+## Measured Performance
 
-## Commands Run In Phase 5
+Measurements are machine/workload specific:
 
-- `foundry server status`
-- `foundry status`
-- `foundry model download qwen3-embedding-0.6b`
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest tests/unit/embeddings tests/unit/retrieval tests/integration/indexing -q --basetemp .local-data/pytest-phase5-target`
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase5-full`
-- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase5-cov`
-- `uv run python scripts/check_foundry.py`
-- Real Foundry embedding smoke test with `qwen3-embedding-0.6b`.
-- Real end-to-end ingestion, indexing, and retrieval smoke test.
-- Headless Streamlit startup smoke test.
+- `phi-3.5-mini`: 5.85 s load and 0.505 s short response in the candidate benchmark.
+- `qwen2.5-0.5b`: 2.64 s load and 0.135 s short response.
+- `qwen3-embedding-0.6b`: 2.43 s load, 1.58 s small-batch embedding, 1,024 finite float32 values.
+- 121-chunk indexing: 83.833 s total, including 82.300 s embedding; 896.441 MB observed peak
+  process RSS.
 
-## Commands Run In Phase 6
+CPU embedding is the primary observed indexing bottleneck. Synchronous indexing and blocked chat
+during indexing are deliberate resource-safety decisions.
 
-- `git status`
-- `git status -sb`
-- `git branch --show-current`
-- `git remote -v`
-- `git log -6 --oneline`
-- `git log origin/main..HEAD --oneline`
-- `git diff origin/main..HEAD --stat`
-- `git ls-files`
-- `foundry server status`
-- `foundry server start`
-- `foundry status`
-- `foundry model download qwen2.5-0.5b-instruct-generic-cpu:4`
-- `foundry model download Phi-3.5-mini-instruct-generic-cpu:2`
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase6-full1`
-- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase6-cov1`
-- `uv run python scripts/check_foundry.py`
-- Targeted RAG unit and integration tests.
-- Real Foundry chat smoke test.
-- Real local end-to-end RAG smoke test.
-- Headless Streamlit startup smoke test.
+## Prior Release-Hardening Validation
 
-## Commands Run In Pre-Phase 7 UI Readiness Audit
+The final Phase 9 completion run passed:
 
-- `git status`
-- `git status -sb`
-- `git branch --show-current`
-- `git remote -v`
-- `git log -8 --oneline`
-- `git fetch origin`
-- `git log HEAD..origin/main --oneline`
-- `git log origin/main..HEAD --oneline`
-- `git ls-files`
-- Security and privacy source searches with `rg`.
-- `uv run pytest tests/integration/indexing/test_indexing_and_retrieval.py -q --basetemp .local-data/pytest-prephase7-indexing`
-- Fake-provider UI-backend pipeline timing smoke test.
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-prephase7-full`
-- `uv run python scripts/check_foundry.py`
-- Real local end-to-end RAG smoke test with cached Foundry Local embedding and chat models.
-- `foundry status`
-- Final `uv run ruff check .`, `uv run mypy src`, and
-  `uv run pytest -m "not foundry" --basetemp .local-data/pytest-prephase7-final`
+- Ruff lint and formatting checks;
+- strict mypy over `src`;
+- 365 non-Foundry tests with two environment/capability skips;
+- 81% total coverage;
+- Foundry discovery, fake UI pipeline, and real Foundry UI smoke;
+- runtime-only setup dry run, stopped-service setup, and idempotency;
+- launcher failure cleanup, HTTP startup, duplicate launch, and scoped stop;
+- two identical 151-entry release builds with matching SHA-256 sidecars;
+- extraction/setup/start/stop from a path containing spaces; and
+- cleanup with Foundry stopped, zero loaded models, and validation ports free.
 
-## Commands Run In Phase 7
+These results describe the prior 0.9.0 working tree. The final 1.0.0 validation results below
+supersede them.
 
-- Initial Git status, branch, remote, fetch, synchronization, history, and tracked-file checks.
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- Targeted UI unit, integration, Streamlit AppTest, RAG evidence, and model-lifecycle tests.
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase7-final`
-- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase7-cov-final`
-- `uv run python scripts/smoke_ui_pipeline.py`
-- `foundry --version`
-- `foundry server status`
-- `foundry status`
-- `uv run python scripts/check_foundry.py`
-- `uv run python scripts/smoke_ui_real.py`
-- `uv run streamlit run src/groundnote/app.py --server.headless true --server.port 8507`
-- Manual in-app browser smoke for upload, indexing, Ready status, grounded answer, citation,
-  insufficient evidence, duplicate handling, rerun behavior, and safe console output.
-- Security and privacy source/tracked-file searches with `rg` and Git.
+## Phase 10 Deliverables
 
-## Commands Run In Phase 7.1
+- Canonical version promotion to `1.0.0`.
+- Final public README and implemented architecture diagrams.
+- Original redistribution-safe demo handbook and question set.
+- Demonstration script and English/Turkish presentation outlines.
+- MIT license verification, contribution/security guidance, and GitHub issue/PR templates.
+- Privacy-safe real screenshots captured only from the demonstration handbook.
+- Updated changelog, roadmap, release/configuration/interface/support documentation, and decisions.
+- Full quality, privacy, real Foundry, manual UI, setup, launcher, release, and cleanup validation.
+- Exactly one authorized final commit and a normal `main` push after every gate passed.
 
-- Initial Git status, branch, remote, fetch, synchronization, history, and tracked-file checks.
-- `uv run ruff check src tests`
-- `uv run mypy src`
-- Targeted retrieval, RAG, UI state, migration, UI workflow, and AppTest checks.
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase71-full1`
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format src\groundnote\app.py src\groundnote\retrieval\service.py`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase71-full-final`
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase71-full-postfix`
-- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase71-cov-final`
-- `uv run python scripts/check_foundry.py`
-- `foundry status`
-- `uv run python scripts/smoke_ui_pipeline.py`
-- `uv run python scripts/smoke_ui_real.py`
-- `uv run streamlit run src/groundnote/app.py --server.headless=true --server.port=8509`
-- Manual in-app browser smoke for chat-first layout, sidebar controls, multiple-file uploader,
-  bottom chat input, and greeting submission.
-- `foundry model unload Phi-3.5-mini-instruct-generic-cpu:2`
-- `foundry model unload qwen3-embedding-0.6b-generic-cpu:1`
-- Deterministic greeting workflow timing smoke.
+## Phase 10 Validation
 
-## Commands Run In Phase 7.1.1
+- `uv sync`: Passed; package metadata and `uv.lock` resolve GroundNote `1.0.0`.
+- `uv run python -m groundnote --version`: Passed with `1.0.0`.
+- Ruff lint/format and strict mypy: Passed; 175 files formatted and 99 source files typed.
+- Full non-Foundry suite: 363 passed, two Windows environment/capability tests skipped.
+- Coverage: 363 passed, two skipped, 83% total coverage.
+- Foundry check: CLI `0.10.2`, Windows SDK `1.2.3`, 46 aliases, required CPU variants cached,
+  and no model download.
+- Fake UI pipeline: Passed with indexing, citation, duplicate, persistence, and insufficient
+  evidence behavior.
+- Real Foundry UI smoke: Passed with local embeddings, grounded English/Turkish answers, trusted
+  citations, citation-free insufficient evidence, no cleanup warning, and zero loaded models.
+- Real safe-document UI smoke: 14 chunks indexed; Ready required complete integrity; a grounded
+  answer cited `Data Quality Rules`; the unsupported satellite question returned no sources; New
+  chat preserved the index; English/Turkish UI, re-index, and remove succeeded.
+- Three real screenshots were captured from the original fictional handbook with no personal path,
+  account, secret, or private document content.
+- PowerShell parser: Passed for every script.
+- Setup dry run and two stopped-Foundry runtime-only setup runs: Passed; existing marker preserved,
+  no development packages installed, and temporary data removed.
+- Launcher: HTTP 200, duplicate detection, token/PID/port-scoped stop, and metadata-write failure
+  cleanup passed with ports and session metadata removed.
+- Release: two 153-entry 1.0.0 archives produced the same SHA-256; the sidecar matched; required
+  public/runtime files were present; prohibited/private members were absent.
+- Extracted release: runtime-only setup, doctor, launch, HTTP health, and scoped stop passed from a
+  path containing spaces.
+- Cleanup: temporary databases, managed demo copies, logs, release ZIP/checksum files, extraction
+  trees, environments, coverage output, session metadata, listeners, and GroundNote-owned model
+  activity were removed.
 
-- Initial Git branch, cleanliness, remote, synchronization, history, and Phase 8 safety checks.
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- Targeted logging, upload, UI state, workflow, pipeline, and Streamlit AppTest checks.
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase711-postreview-final`
-- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase711-coverage-postreview`
-- `uv run python scripts/check_foundry.py`
-- `uv run python scripts/smoke_ui_pipeline.py`
-- `uv run python scripts/smoke_ui_real.py`
-- `uv run streamlit run src/groundnote/app.py --server.headless=true --server.port=8511`
-- Manual in-app Windows browser smoke for automatic DOCX/PDF upload, corrupt-file continuation,
-  inline retry, duplicates, settings reruns, grounded follow-up chat, New chat, and model unloading.
-- `foundry status`
-- Security, privacy, generated-file, and tracked-file searches with `rg` and Git.
+## Known Limitations
 
-## Commands Run In Phase 7.2
-
-- Initial Git branch, cleanliness, remote, synchronization, history, and Phase 8 safety checks.
-- Security and tracked-file checks with `rg` and Git.
-- Targeted router, RAG repetition, citation cleanup, UI workflow, and safe error tests.
-- `uv run ruff check src tests`
-- `uv run ruff format src\groundnote\rag\service.py`
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest -m "not foundry" --basetemp .local-data/pytest-phase72-full-final5`
-- `uv run pytest --cov=groundnote --cov-report=term-missing --basetemp .local-data/pytest-phase72-cov-final`
-- `uv run python scripts/check_foundry.py`
-- `uv run python scripts/smoke_ui_pipeline.py`
-- `uv run python scripts/smoke_ui_real.py`
-- Headless Streamlit startup smoke on port 8512.
-- Manual Windows real-document timing smoke with MB nomenclature PDF, Turkish design PDF, generated
-  image-only PDF, and a small TXT fixture.
-
-## Commands Run In Phase 7.2.1
-
-- Initial governance, attachment, Git branch, remote, synchronization, and tracked-file checks.
-- `uv run ruff check src tests`
-- `uv run mypy src`
-- Targeted workflow, router, RAG service, and Streamlit AppTest regression checks.
-- `uv run ruff format src tests`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run pytest tests\unit\ui\test_workflows.py tests\unit\rag\test_phase_7_1_router.py tests\unit\rag\test_service.py tests\integration\ui\test_streamlit_app.py -q`
-- `uv run pytest -m "not foundry"`
-- `uv run pytest --cov=groundnote --cov-report=term-missing`
-- `uv sync`
-- `uv run python scripts\check_foundry.py`
-- `uv run python scripts\smoke_ui_pipeline.py`
-- `foundry server start`
-- `uv run python scripts\smoke_ui_real.py`
-- Foundry model unload commands for `Phi-3.5-mini-instruct-generic-cpu:2`,
-  `qwen3-embedding-0.6b-generic-cpu:1`, and `qwen2.5-0.5b-instruct-generic-cpu:4`.
-- Headless Streamlit startup smoke on port 8513, followed by verified process cleanup.
-- Representative local fixture manual smoke for inventory, delete, invalid/greeting bypasses, and
-  MB-like table ambiguity.
-
-## Commands Run In Phase 7.2.2
-
-- Initial application shutdown, port cleanup, Foundry model unload, and governance document checks.
-- Targeted code searches for Streamlit operation state, router language handling, RAG retrieval,
-  prompt, answer validation, and section metadata.
-- `uv run ruff check src/groundnote/rag src/groundnote/ui tests/unit/rag tests/unit/ui`
-- `uv run pytest tests/unit/rag/test_service.py tests/unit/rag/test_phase_7_1_router.py tests/unit/ui/test_state.py -q`
-- `uv sync`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run mypy src`
-- `uv run ruff format src/groundnote/rag/section_filter.py src/groundnote/rag/service.py`
-- `uv run pytest -m "not foundry"`
-- `uv run pytest --cov=groundnote --cov-report=term-missing`
-- `uv run python scripts/check_foundry.py`
-- `uv run python scripts/smoke_ui_pipeline.py`
-- `uv run python scripts/smoke_ui_real.py`
-- Headless Streamlit startup smoke on port 8514, followed by explicit child-process cleanup.
-- Foundry model unload commands for `phi-3.5-mini`, `qwen2.5-0.5b`, and
-  `qwen3-embedding-0.6b`, followed by `foundry status` confirming `0` loaded models.
-
-## Test Status
-
-- Phase 7 UI unit/integration/Streamlit target: Passed.
-- Phase 7 fake-provider UI pipeline: Passed with one indexed chunk, one trusted citation,
-  insufficient evidence, duplicate detection, persistence after context restart, and no chat
-  history.
-- Phase 7 real Foundry UI-backend smoke: Passed with 1024-dimensional local embeddings, English and
-  Turkish grounded answers, trusted citations, citation-free insufficient evidence, and zero loaded
-  models afterward.
-- Phase 7 manual Streamlit smoke: Passed for application layout, 50 MB upload limit, local upload,
-  synchronous indexing, Ready status, grounded answer, citation display, insufficient evidence,
-  duplicate handling, rerun behavior, and no raw browser error.
-- Phase 7 `uv run pytest -m "not foundry"`: Passed, 185 tests passed.
-- Phase 7 coverage: Passed, 84% total coverage.
-- Phase 7.1 targeted retrieval/RAG/UI checks: Passed.
-- Phase 7.1 `uv run pytest -m "not foundry"`: Passed, 191 tests passed.
-- Phase 7.1 coverage: Passed, 191 tests passed, 80% total coverage.
-- Phase 7.1 fake-provider UI pipeline: Passed.
-- Phase 7.1 real Foundry UI-backend smoke: Passed with local embeddings and chat.
-- Phase 7.1 manual Streamlit browser smoke: Passed for chat-first layout, sidebar upload, language,
-  performance mode, multiple-file input, bottom chat input, and greeting response.
-- Phase 7.1 deterministic greeting timing smoke: Passed in 0.07 ms with zero model calls and zero
-  citations.
-- Phase 7.1.1 targeted logging/upload/UI checks: Passed, 31 tests passed.
-- Phase 7.1.1 `uv run pytest -m "not foundry"`: Passed, 203 tests passed.
-- Phase 7.1.1 coverage: Passed, 203 tests passed, 79% total coverage.
-- Phase 7.1.1 fake-provider UI pipeline: Passed with automatic indexing, trusted citation,
-  duplicate detection, persistence, and insufficient-evidence behavior.
-- Phase 7.1.1 real Foundry UI-backend smoke: Passed with local embeddings, English and Turkish
-  grounded answers, citations, and no loaded models afterward.
-- Phase 7.1.1 manual Windows Streamlit smoke: Passed for automatic sequential DOCX/PDF processing,
-  later-file success after a corrupt PDF, inline retry recovery, duplicate skipping, gear settings,
-  rerun protection, grounded follow-up chat with citation, New chat document preservation, no raw
-  traceback, no logging `OSError`, and zero loaded models afterward.
-- Phase 7.2 targeted router/RAG/UI checks: Passed, 74 tests passed.
-- Phase 7.2 `uv run pytest -m "not foundry"`: Passed, 228 tests passed.
-- Phase 7.2 coverage: Passed, 228 tests passed, 79% total coverage.
-- Phase 7.2 Foundry check: Passed; Foundry server `Ready`, 4 cached candidate models, local service
-  reachable.
-- Phase 7.2 fake-provider UI pipeline: Passed.
-- Phase 7.2 real Foundry UI smoke: Passed with local embeddings, English/Turkish grounded answers,
-  insufficient evidence, and trusted citations.
-- Phase 7.2 Streamlit startup smoke: Passed on port 8512 with HTTP 200, then the test instance was
-  stopped.
-- Phase 7.2 manual real-document smoke: Passed for invalid input, greeting, Mercedes chassis,
-  Mercedes engine, Turkish design, image-only PDF rejection, unrelated World Cup insufficient
-  evidence, and small TXT fact answer.
-- Phase 7.2.1 targeted workflow/router/RAG/UI checks: Passed, 53 tests passed.
-- Phase 7.2.1 `uv run pytest -m "not foundry"`: Passed, 235 tests passed.
-- Phase 7.2.1 coverage: Passed, 235 tests passed, 78% total coverage.
-- Phase 7.2.1 Foundry check: Passed; Foundry CLI `0.10.2`, server initially not running, cached
-  model candidates available, and no models loaded.
-- Phase 7.2.1 fake-provider UI pipeline: Passed.
-- Phase 7.2.1 real Foundry UI smoke: Passed after starting the local server, with local embeddings,
-  English/Turkish grounded answers, citations, insufficient evidence, and zero loaded models after
-  unload.
-- Phase 7.2.1 Streamlit startup smoke: Passed on port 8513; the first cleanup did not stop the
-  process, then the listener was explicitly found and stopped, leaving no listener on port 8513.
-- Phase 7.2.1 representative local fixture smoke: Passed for metadata inventory under 1 ms,
-  MB-like table caution in 2.932 ms, and deletion of an old Phases fixture from the index in
-  2.721 ms.
-- Phase 7.2.2 targeted router/RAG/UI state checks: Passed, 50 tests passed.
-- Phase 7.2.2 `uv run pytest -m "not foundry"`: Passed, 241 tests passed.
-- Phase 7.2.2 coverage: Passed, 241 tests passed, 78% total coverage.
-- Phase 7.2.2 Foundry check: Passed; Foundry CLI `0.10.2`, server `Ready`, 4 cached candidate
-  models, and `0` loaded models at check time.
-- Phase 7.2.2 fake-provider UI pipeline: Passed.
-- Phase 7.2.2 real Foundry UI smoke: Passed with local embeddings, English/Turkish grounded
-  answers, citations, and insufficient-evidence behavior.
-- Phase 7.2.2 Streamlit startup smoke: Passed on port 8514 with HTTP 200; the spawned child process
-  was explicitly stopped and the port was verified clear.
-- Phase 7.2.2 final Foundry resource cleanup: Passed; `foundry status` reported `0` loaded models.
-- Pre-Phase 7 targeted indexing tests: Passed, 7 tests passed.
-- Pre-Phase 7 fake-provider UI-backend pipeline timing smoke test: Passed.
-- `uv sync`: Passed.
-- `uv run ruff check .`: Passed.
-- `uv run ruff format --check .`: Passed, 121 files already formatted.
-- `uv run mypy src`: Passed, no issues in 76 source files.
-- `uv run pytest -m "not foundry"`: Passed, 135 tests passed.
-- `uv run python scripts/check_foundry.py`: Passed; Foundry CLI `0.10.2`, server `Ready`, 4 cached
-  models, 0 loaded models at check time.
-- Pre-Phase 7 real local end-to-end RAG smoke test: Passed with cached `qwen3-embedding-0.6b` and
-  `phi-3.5-mini`, 1 indexed chunk, grounded answer, and 1 citation.
-- Post-smoke `foundry status`: Passed; service `Ready`, local service `Reachable`, 4 cached models,
-  and 0 loaded models.
-- `uv run pytest --cov=groundnote --cov-report=term-missing`: Passed in Phase 6, 134 tests passed,
-  83% total coverage.
-- Streamlit startup smoke test: Passed.
-- Phase 4 targeted chunking and ingestion tests: Passed, 16 tests passed.
-- Phase 5 targeted embedding, indexing, and retrieval tests: Passed, 13 tests passed.
-- Real Foundry embedding smoke test: Passed, 3 vectors, 1024 dimensions, finite float32 values.
-- Real end-to-end indexing and retrieval smoke test: Passed.
-- Phase 6 targeted RAG tests: Passed, 33 targeted unit and integration tests passed.
-- Real Foundry chat smoke test: Passed with `phi-3.5-mini`, English and Turkish responses, valid
-  `[S1]` citations, and `0` loaded models afterward.
-- Real local end-to-end RAG smoke test: Passed with real local embeddings, real local chat,
-  citation metadata, and insufficient-evidence behavior.
-
-## Model Benchmark Status
-
-- Existing Phase 1 benchmark remains valid.
-- Phase 2 did not rerun full model benchmarks.
-- Selected models remain:
-  - Default chat model: `phi-3.5-mini`
-  - Low-resource fallback chat model: `qwen2.5-0.5b`
-  - Embedding model: `qwen3-embedding-0.6b`
-
-## Known Issues
-
-- `uv` is installed but is not on PATH for this shell, so commands are run through the installed
-  executable.
-- `python` and `py` are not on PATH; the project uses managed Python 3.11.15 through `uv`.
-- `pytest` may emit a non-failing cache warning because `.pytest_cache` cannot be written in this
-  Windows workspace.
-- Foundry Local CLI `0.10.2` uses `foundry server status`; `foundry service status` is not
-  recognized in this installed preview version.
-- Phase 4 did not initialize or call Foundry Local models. The final Phase 4 regression check
-  reported Foundry service `Ready` with `0` loaded models.
-- Phase 5 needed a one-time `qwen3-embedding-0.6b` download because Foundry status reported `0`
-  cached models and initial load failed with a missing model path.
-- After Phase 5 smoke tests, Foundry status reported service `Ready`, local service `Reachable`,
-  `1` cached model, and `0` loaded models.
-- Phase 6 started with Foundry server `Not running`; `foundry server start` was used and the server
-  became `Ready`.
-- `phi-3.5-mini` was downloaded for the Phase 6 real chat smoke because it was not cached at the
-  start of real chat testing. `qwen2.5-0.5b` was also downloaded and tested as a low-resource
-  fallback, but the final successful smoke used the preferred `phi-3.5-mini` model.
-- Phase 7.1 model operations remain synchronous. Balanced mode keeps models warm during the session,
-  Fast uses the low-resource chat model, and Memory saver unloads after each operation.
-- Phase 7.2.1 automatic processing remains synchronous and sequential; it is not a background
-  queue. Minimal single-document removal is implemented, but full Knowledge Base management,
-  bulk controls, and re-index controls remain Phase 8 work.
-- Phase 7.2 materially improves the observed 81.726 s unrelated-question path to 0.546 s by
-  returning insufficient evidence before chat generation.
-- Topic-specific deterministic factual answers were removed in Phase 9.1A. General factual
-  document questions use relevant retrieved evidence and the local chat model, so they can remain
-  slower than non-factual router responses.
-- Manual Phase 7.2 indexing remained slow for medium PDFs on CPU: MB PDF 98.081 s and Turkish
-  design PDF 107.257 s. Duplicate detection and warm embedding reuse are improved, but full
-  background indexing and broader indexing controls remain future work.
-- The requested Phase 7.2.1 real document set was not found under the repository, Downloads, or
-  Documents search locations during this patch, so representative local fixtures were used for the
-  new manual smoke. Real user documents should be re-tested in the UI when available.
-- Phase 7.2.2 section matching is conservative and based on retrieved section titles. If source
-  documents lack useful headings, broad retrieval may still need the local chat model to handle the
-  selected context carefully.
-- Phase 7.2.2 targeted tests cover synthetic section/title separation and explicit comparison. The
-  user should still manually retest the real study documents in the Streamlit UI.
-- A parse failure that occurs before persistence can be retried while the browser still supplies the
-  selected upload; after the file is unavailable, the user must select it again.
-- Real Foundry Phase 7.1 smoke timings were measured on a tiny safe fixture:
-  - indexing: 5.316 s
-  - English grounded answer: 20.919 s
-  - Turkish grounded answer: 12.946 s
-  - insufficient-evidence answer: 12.969 s
-  These are materially below the reported 73.93 s case but still synchronous local inference.
-
-## Pre-Phase 6 Audit Notes
-
-- The pre-Phase 6 audit found and fixed privacy-safe representation gaps so model `repr(...)`
-  output no longer includes document text, query text, answer text, or raw vector values.
-- The audit also found a Foundry Local preview SDK load-path issue for
-  `qwen3-embedding-0.6b-generic-cpu:1`. The embedding provider now falls back to the local Foundry
-  daemon on `127.0.0.1` for the same local embedding model variant when direct SDK loading fails.
-- Real embedding smoke after the fix passed with 3 vectors, 1024 dimensions, finite float32 values,
-  and `0` loaded models after unload.
+- CPU embedding can be slow for medium and large documents.
+- Indexing is synchronous, accepts one document at a time, and disables chat while active.
+- No OCR, persistent background queue, active cancellation, or parallel model execution.
+- No persistent conversation history, multi-user accounts, cloud sync, or external integrations.
+- A failed replacement re-index cannot retain the prior complete vector version.
+- No signed native installer, bundled model, or automatic updater.
+- Windows setup/launcher/release behavior has the strongest validation; macOS is best effort.
+- Foundry Local is preview software and its SDK, CLI, and catalog may change.
 
 ## Environment Facts
 
-- OS: Microsoft Windows 11 Pro, version 10.0.22621, 64-bit.
-- Foundry Local CLI: `0.10.2`.
-- Foundry Local SDK: `foundry-local-sdk-winml` `1.2.3`.
-- Managed Python: 3.11.15.
-- `uv`: 0.11.29.
+- OS: Windows 11 Pro, 64-bit
+- Managed Python: `3.11.15`
+- uv: `0.11.29`
+- Foundry Local CLI: `0.10.2`
+- Windows SDK: `foundry-local-sdk-winml 1.2.3`
 
-## Phase 8 Completion
+Machine-identifying hostnames, user-profile paths, and private document names are intentionally not
+recorded.
 
-- Status: Complete locally; validation and push status are recorded with the Phase 8 session.
-- Added localized Knowledge Base metadata, confirmed remove/clear-all actions, and sequential
-  per-document re-indexing.
-- All document mutations affect only GroundNote's SQLite index; original user source files remain
-  untouched.
-- New chat remains in-memory only and is safely blocked during active operations.
-- Re-index all and a background indexing queue were intentionally deferred.
+## Next Step
 
-## Phase 8.1 Stabilization
-
-- Status: Complete locally; validation and push status are recorded with the Phase 8.1 session.
-- Knowledge Base actions now use responsive stacked full-width controls.
-- Active document operations reject new upload registration before it can create an orphaned queue
-  item, and all operation paths continue to release busy state in `finally` blocks.
-- Re-index success/failure feedback survives one Streamlit rerun through a privacy-safe one-time
-  session notice.
-- Local application composition caches are separated by a hash of path configuration to avoid
-  cross-database cache reuse.
-
-## Phase 9 Packaging and Release Preparation
-
-- Added version `0.9.0` in `pyproject.toml` as the single source of truth and exposed it through
-  `importlib.metadata`.
-- Added a privacy-safe `python -m groundnote doctor` command for Python, uv, dependency,
-  configuration, directory, SQLite, Foundry, cached-model, loaded-model, port, import, and optional
-  Git checks.
-- Added idempotent `setup_windows.ps1`, localhost-only `start_groundnote.ps1`, PID/token-scoped
-  `stop_groundnote.ps1`, `doctor.ps1`, and `build_release_archive.ps1` workflows.
-- Added localized first-run doctor guidance and application version display without a UI redesign.
-- Added a deterministic allowlisted portable ZIP builder with fixed entry timestamps and explicit
-  exclusion of private/local/generated data.
-- Added changelog, Phase 9 architecture notes, packaging strategy, and release checklist.
-- Selected a portable source ZIP plus setup/launcher scripts; native installers remain deferred.
-
-## Commands Run In Phase 9
-
-- Initial governance, Git synchronization, environment, version, Foundry, path, setup, launcher,
-  and release-file audit.
-- Foundry CLI `--help`, `model --help`, `cache --help`, JSON status, and cache introspection.
-- `uv sync`.
-- Targeted Phase 9 Ruff, mypy, version, diagnostics, archive, PowerShell, and bootstrap tests.
-- PowerShell language-parser validation for every `.ps1` script.
-- `uv run python -m groundnote --version`.
-- `uv run python -m groundnote doctor --port 18507`.
-- Two isolated `scripts/setup_windows.ps1` runs with an existing-file preservation check.
-- Isolated launcher HTTP 200, duplicate-start, scoped-stop, and listener-cleanup smoke on port
-  `18508`.
-- Portable archive build and member audit: 143 entries, 0 blocked entries, 0 missing required
-  entries; generated smoke archive removed afterward.
-- `uv run ruff check .`.
-- `uv run ruff format --check .`.
-- `uv run mypy src`.
-- `uv run pytest -m "not foundry"`.
-- `uv run pytest --cov=groundnote --cov-report=term-missing`.
-- `uv run python scripts/check_foundry.py`.
-- `uv run python scripts/smoke_ui_pipeline.py`.
-- `uv run python scripts/smoke_ui_real.py`.
-
-## Phase 9 Test Status
-
-- Full non-Foundry suite: Passed, 264 tests.
-- Coverage: Passed, 264 tests and 78% total coverage.
-- Phase 9 targeted tests: Passed, 13 tests before full regression.
-- PowerShell syntax: Passed for setup, start, stop, doctor, and archive scripts.
-- Doctor: Passed with version `0.9.0`, valid SQLite, cached required models, zero initially loaded
-  models, application import, and safe output.
-- Setup idempotence: Passed twice in an isolated path containing spaces; existing data preserved.
-- Launcher: Passed with localhost HTTP 200, duplicate detection, and zero listener after scoped stop.
-- Portable ZIP: Passed deterministic/unit checks and real build member inspection.
-- Fake and real UI pipelines: Passed; real smoke produced grounded English and Turkish answers,
-  trusted citations, and insufficient-evidence behavior using a temporary fixture.
-
-## Phase 9 Known Limitations
-
-- The portable archive still requires uv and Microsoft Foundry Local to be installed separately.
-- First-time dependency and model downloads require internet and remain explicit user actions.
-- The launcher and setup workflow were validated on the current Windows machine and isolated local
-  paths, but not yet on a separate clean Windows account or virtual machine.
-- Foundry CLI `0.10.2` may start its daemon for cache inspection; the doctor restores an initially
-  stopped daemon before exiting.
-- A full signed MSI/EXE/MSIX installer, automatic updates, system service, and bundled models are
-  intentionally not part of Phase 9.
-
-## Phase 9.1A Correctness, Recovery, and Managed File Safety
-
-- Removed every topic-specific grounded factual shortcut from the RAG service. Greetings, invalid
-  input, inventory, app help, formatting cleanup, and citation-free insufficient-evidence behavior
-  remain deterministic.
-- Added adversarial grounding controls for unrelated gardening/RAM, coffee/Mercedes, car/coffee,
-  and hydraulics/computer-memory combinations, plus relevant English/Turkish evidence controls.
-- Added a centralized index integrity contract requiring at least one chunk, complete compatible
-  float32 embeddings, matching document model metadata, and exactly one valid FTS row per chunk.
-- Retrieval SQL independently excludes incomplete indexes even before a UI reconciliation read.
-- Bootstrap now treats persisted transient states from a previous process as interrupted, clears
-  partial embeddings and FTS rows, preserves committed pre-embedding chunks and the managed copy,
-  and marks the document retryable. Reconciliation is idempotent and leaves unrelated Ready
-  documents unchanged.
-- Final indexing verifies storage integrity in the same transaction before setting `INDEXED`.
-  Embedding, database, or FTS failures leave no usable partial index and preserve explicit retry.
-- Remove and clear-all now delete only direct, normal managed files represented by database rows
-  after canonical containment and reparse-point validation. External originals, traversal targets,
-  symlinks/reparse points, and unrelated managed-directory files are preserved.
-- The database transaction commits before managed-file cleanup. A later filesystem failure leaves
-  the database consistent and produces a sanitized localized partial-cleanup warning; automatic
-  orphan retry is not attempted without durable ownership metadata.
-- Re-index reuses the existing committed chunks and managed copy. The current storage design does
-  not preserve the prior complete vector version during a failed re-index.
-
-## Phase 9.1A Validation
-
-- Adversarial RAG target: Passed, including four unrelated-evidence cases and relevant
-  Turkish/English controls.
-- Index recovery/storage/retrieval/UI target: Passed, 49 tests.
-- Managed-file/workflow/localization/Streamlit target: Passed, 30 tests and one environment-based
-  symlink skip on Windows.
-- `uv sync`: Passed.
-- `uv run ruff check .`: Passed.
-- `uv run ruff format --check .`: Passed, 169 files formatted.
-- `uv run mypy src`: Passed, no issues in 103 source files.
-- `uv run pytest -m "not foundry"`: Passed, 287 tests passed and one environment-based symlink
-  test skipped.
-- Coverage: Passed, 287 tests passed, one skipped, and 79% total coverage.
-- Foundry check: Passed; CLI `0.10.2`, Windows SDK `1.2.3`, required candidates cached, and no
-  models initially loaded.
-- Fake UI pipeline: Passed with complete index, grounded citation, insufficient evidence,
-  duplicate detection, and restart persistence.
-- Real Foundry UI smoke: Passed with local embeddings, English/Turkish grounded answers, trusted
-  citations, and citation-free insufficient evidence.
-- Isolated Phase 9.1A smoke: Passed for false-grounding rejection, relevant grounding, interrupted
-  recovery, retrieval exclusion, retry, managed-copy removal, original/unrelated-file safety,
-  duplicate behavior, and clear-all inventory.
-- Final cleanup: Passed; the chat model loaded by real smoke was unloaded, Foundry was restored to
-  its initially stopped state, relevant Streamlit ports were free, and phase temp/coverage
-  artifacts were removed.
-
-## Phase 9.1A Deferred Work
-
-- Phase 9.1B: completed locally; lifecycle and performance details are recorded below.
-- Phase 9.1C: completed locally; queue details and measurements are recorded below.
-- Phase 9.1D: security and release hardening remain unstarted.
-
-## Phase 9.1B Model Lifecycle and Indexing Performance
-
-- Added one shared lifecycle for Balanced and Fast chat providers. A switch unloads the prior
-  GroundNote-owned provider before loading the next; same-mode reuse avoids a redundant load.
-- Added ownership-aware cleanup for direct WinML and daemon-fallback model paths. Preloaded models
-  owned by another application are not unloaded.
-- Closed embedding cleanup gaps for load, first/later batch, vector/FTS persistence, integrity,
-  retrieval-query, interruption, and explicit shutdown failures.
-- Released retrieval embeddings before chat generation so normal RAG never retains embedding and
-  chat models at the same time.
-- Added operation-local, content-free stage diagnostics and real chunk progress. Technical metrics
-  remain hidden unless the debug toggle is enabled.
-- Reused uploader bytes and the precomputed SHA-256 digest, eliminating a second UploadedFile read
-  and filesystem hash while keeping duplicate detection before model work.
-- Verified one parse, one chunking pass, ordered batches, transactional later-batch failure, and
-  one controlled replacement on re-index.
-- Kept the default embedding batch size at `16` and validated the configurable range `1` through
-  `64`.
-- Added `scripts/benchmark_indexing.py`, which uses a generated or explicit fixture, isolated
-  temporary storage, sanitized JSON metrics, and final model/temp cleanup.
-- Representative real Foundry benchmark: 76,601 bytes, 76,360 characters, 121 chunks, eight
-  batches, 1.397 s model load, 83.273 s embedding, 84.815 s total, and 894.9 MB observed peak process
-  RSS. Loaded model count was zero before and after cleanup.
-- Real Fast → Balanced → Fast smoke produced three non-empty short responses, tracked the requested
-  active alias at each transition, and ended with no active lifecycle provider or cleanup warning.
-- Chat remains blocked during synchronous indexing. CPU-bound embedding dominated the measured
-  operation and safe simultaneous inference was not demonstrated; no background worker was added.
-
-## Phase 9.1B Validation
-
-- `uv sync`, Ruff check/format, mypy, full non-Foundry tests, coverage, Foundry check, fake and real
-  UI smoke, isolated benchmark, package version, and diff checks passed in the completion run.
-- Model lifecycle, indexing interruption, later-batch failure, vector/FTS failure, duplicate work,
-  metrics privacy, progress localization, and no-overlap behavior have focused regression coverage.
-- Foundry CLI `0.10.2`, Windows SDK `1.2.3`, Python `3.11.15`, required cached aliases, and local-only
-  inference were verified. The current catalog selects CPUExecutionProvider for the candidates.
-
-## Phase 9.1C Multi-file Upload Queue and Indexing UX
-
-- Added explicit Waiting, Validating, Parsing, Chunking, Embedding, Saving, Verifying, Ready,
-  Duplicate, Failed, Interrupted, and Cancelled queue states without changing database meanings.
-- Stable submission identities stop ordinary Streamlit reruns, language/debug changes, New Chat,
-  and uploader resets from repeating completed work.
-- The queue accepts at most 10 files and 100 MB combined by default, while the existing 50 MB
-  per-file validation remains authoritative. Both queue limits are configurable and validated.
-- Exactly one item indexes at a time. Duplicate or invalid files terminate independently and the
-  next waiting item continues; one global operation guard blocks chat for the whole queue.
-- Waiting items retain exactly one bounded byte buffer in the current Streamlit session. Ready,
-  Duplicate, Failed, Interrupted, and Cancelled outcomes release it immediately. A full browser
-  session refresh may lose waiting files, which must then be selected again.
-- Persisted failed/interrupted documents use the existing safe re-index contract for explicit
-  Retry. A failure before database persistence requires reselection. Active work is never cancelled
-  mid-write; waiting-item cancellation is safe and releases its buffer.
-- The embedding model is reused across items in the same queue and GroundNote-owned models are
-  unloaded in final cleanup after all-success, middle-failure, and final-failure paths.
-- Real Foundry measurement used three generated 2,588-byte files: 3, 13, and 3 chunks; 5.055 s,
-  6.893 s, and 2.812 s per file; 14.761 s queue total; 906.695 MB peak process RSS; 7,764 peak
-  retained upload bytes; one simultaneous item; model reuse on files two and three; zero loaded
-  models and zero retained bytes after cleanup.
-
-## Phase 9.1C Validation
-
-- `uv sync`, Ruff check/format, mypy, 340-test non-Foundry regression, 79% coverage, Foundry check,
-  fake UI pipeline, fake and real queue benchmarks, real Foundry UI smoke, package version, and
-  diff checks passed.
-- Four queue pipeline integration scenarios passed: three mixed valid files; valid/duplicate/
-  invalid continuation; middle embedding failure; and final embedding failure with cleanup.
-- Foundry CLI `0.10.2`, Windows SDK `1.2.3`, Python `3.11.15`, cached CPU embedding/chat aliases,
-  grounded English/Turkish real answers, and zero cleanup warnings were verified.
-- One pre-existing Windows symlink capability test was skipped and pytest reported a non-fatal
-  `.pytest_cache` access warning; neither affects runtime behavior.
-
-## Next Phase
-
-Phase 9.1D is next only if explicitly requested. Phase 10 has not started.
+There is no next implementation phase in the approved portfolio roadmap. Future enhancements should
+be requested explicitly and treated as post-1.0 work. Tags, GitHub Releases, native installer
+publication, and any external deployment remain unauthorized without a new explicit request.

@@ -17,7 +17,12 @@ from groundnote.chunking import (
 )
 from groundnote.chunking.service import text_chunk_to_document_chunk
 from groundnote.config import Settings
-from groundnote.documents import DocumentProcessingService, DuplicateCheckResult, DuplicateType
+from groundnote.documents import (
+    ChunkCountLimitError,
+    DocumentProcessingService,
+    DuplicateCheckResult,
+    DuplicateType,
+)
 from groundnote.domain import Document, DocumentStatus
 from groundnote.performance import IndexingMetricsCollector, IndexingStage
 from groundnote.storage import SQLiteUnitOfWork
@@ -75,6 +80,8 @@ class PreEmbeddingIngestionService:
             )
             with metrics.measure(IndexingStage.CHUNKING) if metrics else nullcontext():
                 chunking_result = self.chunker.chunk(parsed, chunking_settings)
+            if len(chunking_result.chunks) > self.settings.maximum_document_chunks:
+                raise ChunkCountLimitError()
             if metrics is not None:
                 metrics.chunk_count = len(chunking_result.chunks)
             document_id = str(uuid.uuid4())

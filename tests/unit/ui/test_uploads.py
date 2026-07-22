@@ -1,148 +1,98 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import hashlib
 
-import pytest
-
-from groundnote.ui.errors import map_exception
-from groundnote.ui.state import (
-    PERFORMANCE_MODE,
-    UI_LANGUAGE,
-    UPLOAD_ITEMS,
-    UPLOAD_QUEUE,
-    initialize_session_state,
-)
-from groundnote.ui.uploads import (
-    UploadStatus,
-    complete_upload,
-    fail_upload,
-    get_upload_item,
-    queue_retry,
-    register_selected_uploads,
-    start_upload,
-    upload_items,
-)
+from groundnote.ui.state import LAST_UPLOAD_SELECTION_TOKEN, initialize_session_state
+from groundnote.ui.uploads import register_selected_upload, upload_identity
 
 
-@dataclass
-class FakeUpload:
-    name: str
-    data: bytes
+class UploadedFile:
+    def __init__(self, name: str, data: bytes, *, file_id: str) -> None:
+        self.name = name
+        self.size = len(data)
+        self.type = "text/plain"
+        self.file_id = file_id
+        self._data = data
+        self.read_count = 0
 
     def getvalue(self) -> bytes:
-        return self.data
+        self.read_count += 1
+        return self._data
 
 
-def test_selected_files_queue_automatically_once_across_reruns() -> None:
+def test_one_file_is_read_and_hashed_once_without_retaining_bytes() -> None:
     state: dict[str, object] = {}
     initialize_session_state(state)
-    files = [FakeUpload("one.txt", b"one"), FakeUpload("two.txt", b"two")]
+    uploaded = UploadedFile("study notes.txt", b"local evidence", file_id="one")
 
-    first = register_selected_uploads(state, files)
-    for index, identity in enumerate(first.queued):
-        start_upload(state, identity)
-        complete_upload(
-            state,
-            identity,
-            status=UploadStatus.READY,
-            document_id=f"doc-{index}",
-        )
-    state[UI_LANGUAGE] = "tr"
-    state[PERFORMANCE_MODE] = "Fast"
-    rerun = register_selected_uploads(state, files)
+    registration = register_selected_upload(state, uploaded)
 
-    assert len(first.queued) == 2
-    assert rerun.queued == ()
-    assert state[UPLOAD_QUEUE] == []
-    assert all(item.status is UploadStatus.READY for item in upload_items(state))
+    assert registration.blocked is False
+    assert registration.selection is not None
+    assert registration.selection.filename == "study notes.txt"
+    assert registration.selection.content_sha256 == hashlib.sha256(b"local evidence").hexdigest()
+    assert uploaded.read_count == 1
+    assert all(not isinstance(value, bytes) for value in state.values())
 
 
-def test_second_batch_keeps_completed_first_batch_and_duplicate_selection_is_skipped() -> None:
+def test_same_browser_selection_is_not_registered_again_on_rerun() -> None:
     state: dict[str, object] = {}
     initialize_session_state(state)
-    first_file = FakeUpload("one.txt", b"one")
-    first = register_selected_uploads(state, [first_file])
-    first_identity = first.queued[0]
-    start_upload(state, first_identity)
-    complete_upload(
-        state,
-        first_identity,
-        status=UploadStatus.READY,
-        document_id="doc-one",
-    )
+    uploaded = UploadedFile("rerun.txt", b"one operation", file_id="stable")
 
-    second = register_selected_uploads(
-        state,
-        [first_file, FakeUpload("two.txt", b"two"), FakeUpload("two.txt", b"two")],
-    )
+    first = register_selected_upload(state, uploaded)
+    rerun = register_selected_upload(state, uploaded)
 
-    assert len(second.queued) == 1
-    assert get_upload_item(state, second.queued[0]).filename == "two.txt"
-    assert any(item.document_id == "doc-one" for item in upload_items(state))
+    assert first.selection is not None
+    assert rerun.selection is None
+    assert uploaded.read_count == 1
 
 
-def test_failed_file_is_isolated_retryable_and_state_keeps_no_bytes() -> None:
+def test_new_selection_can_follow_a_completed_single_selection() -> None:
     state: dict[str, object] = {}
     initialize_session_state(state)
-    registration = register_selected_uploads(
-        state,
-        [FakeUpload("corrupt.pdf", b"broken"), FakeUpload("valid.txt", b"valid")],
-    )
-    failed_identity, valid_identity = registration.queued
+    first = UploadedFile("one.txt", b"one", file_id="one")
+    second = UploadedFile("two.txt", b"two", file_id="two")
 
-    start_upload(state, failed_identity)
-    fail_upload(
-        state,
-        failed_identity,
-        message=map_exception(RuntimeError("private parser detail")),
-    )
-    start_upload(state, valid_identity)
-    complete_upload(
-        state,
-        valid_identity,
-        status=UploadStatus.READY,
-        document_id="doc-valid",
-    )
-    with pytest.raises(ValueError, match="selected again"):
-        queue_retry(state, failed_identity)
+    assert register_selected_upload(state, first).selection is not None
+    registration = register_selected_upload(state, second)
 
-    assert state[UPLOAD_QUEUE] == []
-    assert not _contains_bytes(state)
-    assert all(item.data is None for item in state[UPLOAD_ITEMS].values())
+    assert registration.selection is not None
+    assert registration.selection.filename == "two.txt"
+    assert first.read_count == 1
+    assert second.read_count == 1
 
 
-def test_second_upload_is_rejected_without_queueing_while_operation_is_busy() -> None:
+def test_active_indexing_blocks_selection_before_bytes_enter_state() -> None:
     state: dict[str, object] = {}
     initialize_session_state(state)
-    second = FakeUpload("second.txt", b"second private content")
+    uploaded = UploadedFile("blocked.txt", b"must not be read", file_id="blocked")
 
-    registration = register_selected_uploads(state, [second], block_new=True)
+    registration = register_selected_upload(state, uploaded, block_new=True)
 
-    assert registration.queued == ()
-    assert registration.blocked_count == 1
-    assert state[UPLOAD_QUEUE] == []
-    assert state[UPLOAD_ITEMS] == {}
-    assert not _contains_bytes(state)
+    assert registration.blocked is True
+    assert registration.selection is None
+    assert uploaded.read_count == 0
+    assert state[LAST_UPLOAD_SELECTION_TOKEN] is None
 
 
-def test_waiting_upload_recovers_on_next_idle_rerun_instead_of_staying_locked() -> None:
+def test_unicode_and_spaced_filename_has_stable_identity() -> None:
     state: dict[str, object] = {}
     initialize_session_state(state)
-    upload = FakeUpload("waiting.txt", b"waiting")
-    first = register_selected_uploads(state, [upload])
-    identity = first.queued[0]
+    data = "yerel çalışma notu".encode()
+    uploaded = UploadedFile("Çalışma Notları 1.txt", data, file_id="unicode")
 
-    rerun = register_selected_uploads(state, [upload])
+    registration = register_selected_upload(state, uploaded)
 
-    assert list(rerun.queued) == [identity]
-    assert state[UPLOAD_QUEUE] == [identity]
+    assert registration.selection is not None
+    assert registration.selection.identity == upload_identity("Çalışma Notları 1.txt", data)
 
 
-def _contains_bytes(value: object) -> bool:
-    if isinstance(value, bytes):
-        return True
-    if isinstance(value, dict):
-        return any(_contains_bytes(key) or _contains_bytes(item) for key, item in value.items())
-    if isinstance(value, (list, tuple, set)):
-        return any(_contains_bytes(item) for item in value)
-    return False
+def test_single_upload_state_contains_no_queue_structures() -> None:
+    state: dict[str, object] = {}
+    initialize_session_state(state)
+
+    assert "upload_queue" not in state
+    assert "upload_items" not in state
+    assert "completed_upload_identities" not in state
+    assert "failed_upload_identities" not in state

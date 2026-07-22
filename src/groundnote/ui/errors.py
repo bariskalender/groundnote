@@ -9,15 +9,19 @@ from typing import Any
 from groundnote.ai import FoundryCatalogError, FoundryModelUnavailableError, FoundryProviderError
 from groundnote.chunking.errors import ChunkingError
 from groundnote.documents import (
+    ChunkCountLimitError,
     CorruptDocumentError,
     DocumentError,
+    DocxArchiveSafetyError,
     DuplicateDocumentError,
     EmptyDocumentError,
     EncodingError,
     EncryptedDocumentError,
+    ExtractedTextLimitError,
     FileTooLargeError,
     NoExtractableTextError,
     ParserNotFoundError,
+    PdfPageLimitError,
     UnsafeFileError,
     UnsupportedFileTypeError,
 )
@@ -115,6 +119,68 @@ def map_exception(error: BaseException, language: str = "en") -> UiMessage:
                 "Dosya çok büyük",
                 "Belge, yapılandırılmış yerel yükleme sınırını aşıyor.",
                 "Daha küçük bir belge seçin veya yerel yükleme ayarını değiştirin.",
+            ),
+            MessageSeverity.WARNING,
+        )
+    if isinstance(error, PdfPageLimitError):
+        return _message(
+            language,
+            (
+                "PDF page limit exceeded",
+                "This PDF contains too many pages for safe local processing.",
+                "Choose a shorter PDF or split it into smaller documents.",
+            ),
+            (
+                "PDF sayfa sınırı aşıldı",
+                "Bu PDF, güvenli yerel işleme için çok fazla sayfa içeriyor.",
+                "Daha kısa bir PDF seçin veya belgeyi daha küçük parçalara ayırın.",
+            ),
+            MessageSeverity.WARNING,
+        )
+    if isinstance(error, ExtractedTextLimitError):
+        return _message(
+            language,
+            (
+                "Extracted text limit exceeded",
+                "This document is too large after extraction.",
+                "Choose a smaller document or split it into smaller documents.",
+            ),
+            (
+                "Çıkarılan metin sınırı aşıldı",
+                "Bu belge, metin çıkarıldıktan sonra güvenlik sınırını aşıyor.",
+                "Daha küçük bir belge seçin veya belgeyi daha küçük parçalara ayırın.",
+            ),
+            MessageSeverity.WARNING,
+        )
+    if isinstance(error, DocxArchiveSafetyError):
+        return _message(
+            language,
+            (
+                "Unsafe DOCX archive",
+                "This DOCX file expands beyond GroundNote's safety limit or has an unsafe "
+                "archive structure.",
+                "Open the source locally and export a fresh, smaller DOCX copy.",
+            ),
+            (
+                "Güvenli olmayan DOCX arşivi",
+                "Bu DOCX dosyası GroundNote güvenlik sınırını aşıyor veya güvenli olmayan bir "
+                "arşiv yapısına sahip.",
+                "Kaynağı yerel olarak açıp daha küçük ve yeni bir DOCX kopyası dışa aktarın.",
+            ),
+            MessageSeverity.WARNING,
+        )
+    if isinstance(error, ChunkCountLimitError):
+        return _message(
+            language,
+            (
+                "Document section limit exceeded",
+                "This document creates too many searchable sections for safe local indexing.",
+                "Choose a smaller document or split it into smaller documents.",
+            ),
+            (
+                "Belge parça sınırı aşıldı",
+                "Bu belge, güvenli yerel indeksleme için çok fazla aranabilir parça oluşturuyor.",
+                "Daha küçük bir belge seçin veya belgeyi daha küçük parçalara ayırın.",
             ),
             MessageSeverity.WARNING,
         )

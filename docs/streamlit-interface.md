@@ -1,6 +1,6 @@
 # Streamlit Interface
 
-Phase 8 provides GroundNote's chat-first local user interface. It connects automatic secure
+GroundNote 1.0.0 provides a chat-first local user interface. It connects automatic secure
 document processing, hybrid retrieval, and grounded RAG services without duplicating their
 business logic.
 
@@ -41,11 +41,11 @@ controls do not load a model or restart document processing.
 The simplified sidebar contains:
 
 - New chat;
-- multiple-file upload;
+- one-file-at-a-time automatic upload;
 - a localized Knowledge Base list with safe status labels, compact metadata, inline retry for
   failed documents, confirmed remove and clear-all actions, and per-document re-indexing;
 - optional collapsed source filters;
-- Foundry Local status (`Ready`, `Not running`, `Unavailable`, or `Unknown`);
+- a localized Foundry Local status (ready, stopped, starting, unavailable, or unknown);
 - a small local-only and OCR notice.
 
 The main area is the conversation. It shows assistant/user messages, compact citations, and a
@@ -53,24 +53,31 @@ bottom chat input. Technical retrieval details are hidden from the normal answer
 
 ## Documents View
 
-The upload control accepts multiple `.pdf`, `.docx`, `.txt`, `.md`, or `.markdown` files. The
-default limits are 10 files per queue, 50 MB per file, and 100 MB combined. The backend enforces
-the authoritative limits and does not trust browser MIME values.
+The upload control accepts one `.pdf`, `.docx`, `.txt`, `.md`, or `.markdown` file at a time. The
+default per-file limit is 50 MB. The backend enforces the authoritative limit and does not trust
+browser MIME values.
 
-Documents are registered in a bounded in-session queue and automatically processed after
-selection. Processing is synchronous, sequential, and local; it is not a background worker or a
-durable restart queue. No separate processing or indexing button is required:
+The selected document is automatically processed synchronously and locally. GroundNote does not
+use a background worker or persistent queue. No separate processing or indexing button is
+required:
 
 1. write the bytes under the application-controlled document directory with a collision-resistant
    stored filename;
-2. validate the file type, signature, filename, and size;
+2. validate the file type, signature, filename, and compressed size;
 3. calculate SHA-256 and check for an exact duplicate;
-4. parse and chunk the document through the existing ingestion service;
-5. persist metadata and chunks as `PENDING_EMBEDDING`;
-6. load the local embedding model and generate validated float32 embeddings;
-7. persist embeddings and mark the document `INDEXED`;
-8. reuse the embedding model for the next waiting file, then unload GroundNote-owned models after
-   the final queue item.
+4. inspect PDF page or DOCX archive metadata before content extraction;
+5. parse incrementally while enforcing the extracted-character limit;
+6. chunk the document and enforce the document chunk-count limit;
+7. persist metadata and chunks as `PENDING_EMBEDDING`;
+8. load the local embedding model and generate validated float32 embeddings;
+9. persist embeddings and FTS rows, verify index integrity, and commit `INDEXED`;
+10. release process-local indexing ownership and unload GroundNote-owned models under the selected
+   cleanup policy.
+
+PDFs over `1,000` pages, documents over `5,000,000` extracted characters, documents over `10,000`
+chunks, and unsafe/over-expanding DOCX archives are rejected before embedding. The UI shows a
+localized safe explanation, releases the active operation, removes a pre-persistence temporary
+copy, and never displays an archive member path or traceback.
 
 The UI reports real stage boundaries rather than estimated percentages. A successful summary shows
 only safe metadata: original filename, type, size, page/section counts when available, chunk counts,
@@ -138,8 +145,9 @@ and "Group the documents I uploaded" are answered from indexed document metadata
 retrieval or the chat model and do not fabricate page citations.
 
 If no document is ready, GroundNote answers locally that the user should upload a document or wait
-for processing. If at least one document is ready, questions can proceed against ready documents
-while later uploads are still processing.
+for processing. While the single synchronous indexing operation is genuinely active, chat and
+document mutations remain blocked; a browser refresh preserves that ownership instead of showing a
+false Ready state.
 
 Conversation history is stored only in `st.session_state`. It is not persisted to SQLite. New chat
 clears messages only; it preserves the Knowledge Base, source filters, and settings. It is disabled
@@ -173,39 +181,32 @@ in the settings popover.
 
 ## Session And Rerun Behavior
 
-`st.session_state` contains safe message models, current filter IDs, and an upload lifecycle made of
-opaque submission/item identities, compact statuses, and a structured operation record. Each
-Waiting item owns exactly one bounded immutable upload buffer so work can continue across ordinary
-Streamlit reruns. Ready, Duplicate, Failed, Interrupted, and Cancelled outcomes release it. Session
-state does not contain extracted document text, embeddings, model instances, database connections,
-transactions, or persistent chat history.
+`st.session_state` contains safe message models, current filter IDs, an opaque last-selection token,
+and a structured operation record. Uploaded bytes remain in the immediate synchronous call only;
+they are not retained in session state. Session state does not contain extracted document text,
+embeddings, model instances, database connections, transactions, or persistent chat history.
 
 The application context is cached as a Streamlit resource because it contains stateless service
 composition and lazily initialized provider objects. SQLite connections remain short-lived and are
 never cached. Uploaded bytes, extracted text, prompts, answers, and vectors are not cached.
 
-Stable submission identities combine the uploader revision and ordered opaque content identities.
-Completed and active items are not queued again on Streamlit reruns, language/debug changes,
-settings changes, chat submission, New chat, or the completion rerun. SHA-256 database duplicate
-detection remains the authoritative content-level fallback. Structured operations record an ID,
-type, start/completion time, and terminal status. `try/finally` releases active state and all
-GroundNote-owned models after the queue.
+The uploader revision and opaque browser selection token prevent an ordinary rerun from restarting
+the same operation. SHA-256 database duplicate detection remains authoritative. Structured
+operations record an ID, type, start/completion time, and terminal status. `try/finally` releases
+active UI state and resets the uploader after both success and failure.
 
-The queue shows selection position, sanitized filename, current stage, real completed/total units,
-safe duration, and terminal outcome. One failure does not block later files. Failed or Interrupted
-items backed by a persisted document offer Retry; a pre-persistence failure requires reselection.
-Waiting items can be cancelled safely, and terminal result cards can be cleared. Active database or
-model work is never interrupted through the queue UI.
+A process-local, database-scoped registry owns active indexing independently of browser session
+state. Refreshing the browser cannot turn active work into Ready, start duplicate indexing, or make
+the document searchable. The new session displays Indexing until the original operation commits
+the complete index and releases ownership. A real server restart clears the registry, allowing
+the bootstrap recovery contract to mark a persisted transient record Interrupted / Retry required.
+If a local inference call hangs without returning or raising, ownership intentionally remains
+active and the UI stays conservative; restarting the GroundNote server triggers normal interrupted
+work recovery.
 
-A full browser session refresh may discard waiting in-memory buffers. GroundNote does not pretend
-those files completed and does not reconstruct incomplete buffers. Phase 9.1A bootstrap recovery
-remains authoritative for persisted transient document records; the user must reselect any lost
-waiting-only files.
-
-New file selections are rejected before queue registration while a document/database operation is
-active. The UI displays a localized busy explanation and advances the upload widget key so a
-rejected selection cannot remain as an orphaned Waiting item. Successful and failed re-index results
-use a one-time safe notice that survives the completion rerun and is then removed from session state.
+The UI shows only real single-document stages and progress units. A persisted Failed or Interrupted
+document offers Retry; a pre-persistence failure requires reselection. New uploads and chat are
+blocked while indexing is active, using distinct localized explanations.
 
 ## Windows Logging And Safe Errors
 
@@ -231,8 +232,8 @@ only privacy-safe event names, categories, counts, statuses, and durations.
 - Balanced unloads idle models after a short local idle TTL.
 - Fast keeps models warm longer and may use more RAM.
 - Memory saver unloads models after each operation and uses a shorter idle TTL.
-- Sequential queue items reuse one warm embedding provider, then final cleanup unloads it regardless
-  of the selected performance mode.
+- Indexing cleanup unloads the embedding provider according to the selected performance policy;
+  failure paths always release resources.
 - The UI avoids starting indexing and answer generation at the same time in the normal Streamlit
   flow.
 - Chat models are unloaded before document indexing when safe.

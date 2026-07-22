@@ -6,6 +6,7 @@
 - [ ] Confirm `python -m groundnote --version` matches the release.
 - [ ] Add the release section to `CHANGELOG.md`.
 - [ ] Confirm ROADMAP, PROJECT_STATE, README, and release documentation are current.
+- [ ] Confirm screenshots contain only the original safe demo content and no personal UI chrome.
 - [ ] Confirm the working tree contains only intended release changes.
 
 ## Quality gates
@@ -20,10 +21,14 @@
 ## Windows workflow
 
 - [ ] Run setup twice against isolated data and confirm existing data remains.
+- [ ] Confirm setup installs runtime dependencies with `uv sync --no-dev` and succeeds with a
+  warning when Foundry Local is installed but stopped.
 - [ ] Start with `scripts/start_groundnote.ps1 -Background -NoBrowser`.
 - [ ] Run the launcher again and confirm it reports the existing instance.
 - [ ] Confirm the URL is loopback-only and the Knowledge Base is preserved.
 - [ ] Stop with `scripts/stop_groundnote.ps1` and confirm no listener remains.
+- [ ] Simulate a runtime-metadata write failure and confirm only the token-owned launch is stopped,
+  partial metadata is removed, and the selected port is free.
 - [ ] Confirm no unrelated Python or Foundry process was terminated.
 
 ## Models and product smoke
@@ -37,11 +42,19 @@
 ## Archive
 
 - [ ] Run `scripts/build_release_archive.ps1`.
+- [ ] Verify `groundnote-<version>.zip.sha256` against the ZIP and confirm it contains no absolute
+  path.
+- [ ] Build twice from identical input and confirm the ZIP SHA-256 values match.
 - [ ] Inspect every ZIP member without extracting into a user data folder.
 - [ ] Confirm required scripts, source, lockfile, configuration example, docs, and license exist.
+- [ ] Confirm CONTRIBUTING, SECURITY, and the original demo examples exist.
 - [ ] Confirm `.env`, databases, documents, logs, caches, models, vectors, tests, and Git metadata do
   not exist in the ZIP.
-- [ ] Test the extracted archive on a clean Windows account or VM.
+- [ ] Confirm no current/prior ZIP or checksum is a ZIP member and extract under a path containing
+  spaces.
+- [ ] Run isolated extracted-release setup, doctor, start, HTTP health, and scoped stop from a path
+      containing spaces.
+- [ ] Record separate clean Windows account/VM testing when available; do not imply it was run.
 
 ## Publication boundary
 

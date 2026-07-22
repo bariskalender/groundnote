@@ -1,0 +1,52 @@
+name: Bug report
+description: Report a reproducible GroundNote defect using privacy-safe data.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not attach private documents, databases, logs, prompts, answers, screenshots with personal information, or secrets. Use a synthetic fixture.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: GroundNote version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows 11
+        - macOS
+        - Other or unverified
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Safe reproduction steps
+      description: Use synthetic data and remove personal paths, filenames, and content.
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Diagnostics and checks
+      description: Share sanitized doctor output and commands run; do not paste raw logs.
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy confirmation
+      options:
+        - label: I removed private data, secrets, personal paths, and copyrighted documents.
+          required: true

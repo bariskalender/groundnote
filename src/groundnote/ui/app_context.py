@@ -18,6 +18,7 @@ from groundnote.embeddings.models import BatchEmbeddingProvider
 from groundnote.rag import RagService
 from groundnote.retrieval.service import SemanticRetrievalService
 from groundnote.services import (
+    ActiveIndexingRegistry,
     DocumentIndexingService,
     DocumentIndexIntegrityService,
     PreEmbeddingIngestionService,
@@ -35,6 +36,7 @@ class ApplicationContext:
     settings: Settings
     connection_factory: SQLiteConnectionFactory
     unit_of_work_factory: SQLiteUnitOfWorkFactory
+    indexing_registry: ActiveIndexingRegistry
     foundry_manager: FoundryManager
     chat_model_lifecycle: ChatModelLifecycle
     embedding_provider: BatchEmbeddingProvider
@@ -68,6 +70,7 @@ def build_application_context(
         raise RuntimeError("Database path is not configured.")
     connection_factory = SQLiteConnectionFactory(resolved_settings.database_path)
     unit_of_work_factory = dependencies.unit_of_work_factory
+    indexing_registry = dependencies.indexing_registry
     manager = FoundryManager(app_name="groundnote")
     resolved_embedding_provider = cast(
         BatchEmbeddingProvider,
@@ -98,15 +101,18 @@ def build_application_context(
         settings=resolved_settings,
         unit_of_work_factory=unit_of_work_factory,
         embedding_service=embedding_service,
+        indexing_registry=indexing_registry,
     )
     index_integrity_service = DocumentIndexIntegrityService(
         settings=resolved_settings,
         unit_of_work_factory=unit_of_work_factory,
+        indexing_registry=indexing_registry,
     )
     retrieval_service = SemanticRetrievalService(
         settings=resolved_settings,
         connection_factory=connection_factory,
         embedding_service=embedding_service,
+        indexing_registry=indexing_registry,
     )
     rag_service = RagService(
         settings=resolved_settings,
@@ -129,6 +135,7 @@ def build_application_context(
         ingestion_service=ingestion_service,
         indexing_service=indexing_service,
         index_integrity_service=index_integrity_service,
+        indexing_registry=indexing_registry,
     )
     question_workflow = QuestionWorkflow(
         document_workflow=document_workflow,
@@ -143,6 +150,7 @@ def build_application_context(
         settings=resolved_settings,
         connection_factory=connection_factory,
         unit_of_work_factory=unit_of_work_factory,
+        indexing_registry=indexing_registry,
         foundry_manager=manager,
         chat_model_lifecycle=chat_model_lifecycle,
         embedding_provider=resolved_embedding_provider,

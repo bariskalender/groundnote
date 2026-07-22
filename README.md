@@ -1,249 +1,328 @@
 # GroundNote
 
-Private, Offline RAG Study Assistant powered by Microsoft Foundry Local
+**A private, offline-first RAG study assistant powered by Microsoft Foundry Local.**
 
-Current pre-release version: **0.9.0**
+GroundNote 1.0.0 turns local PDF, DOCX, TXT, and Markdown documents into a searchable study
+knowledge base. It extracts and chunks text locally, stores float32 embeddings in SQLite, combines
+lexical and vector retrieval, and asks a local language model to answer with validated source
+citations.
 
-## About the Project
+## Project Status
 
-GroundNote is a local document assistant mainly designed for university students. The goal is to
-help students study from lecture notes, course documents, and personal study materials without
-sending those files to a cloud AI service.
+Version **1.0.0** is the completed portfolio release. It is a local desktop-style application,
+validated primarily on Windows 11. It is not presented as production-grade software and does not
+include a signed native installer.
 
-Users can upload PDF, DOCX, TXT, and Markdown files, index them locally, manage the local
-Knowledge Base, and ask questions about their contents through the Streamlit interface.
+## Key Capabilities
 
-## Why GroundNote?
+- One-file-at-a-time local ingestion for PDF, DOCX, TXT, and Markdown.
+- SHA-256 duplicate detection and application-managed document copies.
+- Deterministic recursive chunking with page and section metadata.
+- Microsoft Foundry Local embeddings and chat—no cloud inference fallback.
+- SQLite FTS5 plus NumPy cosine similarity for hybrid retrieval.
+- Grounded English and Turkish answers with validated citations.
+- A Streamlit chat interface and local Knowledge Base controls.
+- Re-index, remove, clear-all, source filters, New chat, and performance modes.
+- Bounded PDF/DOCX processing and privacy-safe diagnostics, logs, and release tooling.
 
-- Study from lecture notes and course documents.
-- Keep documents private on the local computer.
-- Avoid sending personal study materials to cloud AI services.
-- Receive answers grounded in uploaded documents.
+## Why GroundNote
 
-## Current Progress
+Study documents often contain private notes, unpublished coursework, or personal annotations.
+GroundNote demonstrates that a useful retrieval-augmented generation workflow can run on one
+computer without sending documents, questions, embeddings, or answers to a cloud AI service. The
+project deliberately uses readable Python, SQLite, NumPy, and small provider interfaces instead of
+an external RAG framework or vector database.
 
-- Project structure.
-- Python 3.11 and uv environment.
-- Minimal Streamlit application shell.
-- Microsoft Foundry Local installation and verification.
-- Local chat model provider.
-- Local embedding provider.
-- Model benchmark scripts.
-- Typed settings and explicit application bootstrap.
-- SQLite schema migrations and repository foundation.
-- Secure document validation and text extraction for PDF, DOCX, TXT, and Markdown.
-- Deterministic hybrid recursive chunking and pre-embedding ingestion.
-- Local embedding indexing and semantic retrieval.
-- Grounded single-turn RAG answer generation with citations.
-- Chat-first Streamlit document upload, indexing, grounded Q&A, session history, and trusted
-  citation interface.
-- Hybrid lexical/vector retrieval with conservative typo-tolerant search.
-- Multiple-file upload, English/Turkish UI text, New chat, and performance modes.
-- Automatic sequential processing after file selection with compact per-document status and retry.
-- Gear-based settings and Streamlit-safe Windows logging without browser tracebacks.
-- Phase 7.2 router hardening for empty, unclear, greeting, thanks, and help inputs before model
-  calls.
-- Repetition protection, compact citations, lower RAG context budget, warm embedding reuse, and
-  safer image-only PDF handling.
-- Minimal confirmed document removal, metadata-based document inventory answers, hidden-by-default
-  debug details, and mode-aware resource cleanup.
-- Section-title-aware retrieval, stronger unsupported-question shortcuts, cleaner answer
-  formatting, and friendly busy-state handling.
-- A localized Knowledge Base with document metadata, confirmed remove and clear-all controls, and
-  sequential per-document re-indexing.
-- Safe duplicate and insufficient-evidence presentation.
-- Unit tests.
-- Ruff and mypy checks.
+## Screenshots
 
-## Current Model Setup
+| Chat and upload | Knowledge Base |
+| --- | --- |
+| ![GroundNote home and chat interface](docs/images/groundnote-home-chat.jpg) | ![GroundNote Knowledge Base with a ready document](docs/images/groundnote-knowledge-base.jpg) |
 
-- Default chat model: `phi-3.5-mini`
-- Low-resource fallback: `qwen2.5-0.5b`
-- Embedding model: `qwen3-embedding-0.6b`
+![Grounded GroundNote answer with trusted source citations](docs/images/groundnote-grounded-answer.jpg)
 
-The default model may change after future testing.
+The screenshots use only the original fictional handbook in
+[`examples/groundnote-demo-handbook.md`](examples/groundnote-demo-handbook.md).
 
-## Benchmark Summary
+## How It Works
 
-| Model | Purpose | Load Time | Response / Embedding Time | Memory |
-| --- | --- | ---: | ---: | ---: |
-| phi-3.5-mini | Default chat | 5.85 s | 0.505 s | ~3.36 GB RSS |
-| qwen2.5-0.5b | Low-resource chat | 2.64 s | 0.135 s | ~620 MB RSS |
-| qwen3-embedding-0.6b | Embeddings | 2.43 s | 1.58 s batch | 1024 dimensions |
+1. The user selects one supported document.
+2. GroundNote validates its name, signature, size, and format-specific safety limits.
+3. Text is extracted locally and split into metadata-preserving chunks.
+4. Foundry Local produces embeddings in bounded batches.
+5. SQLite stores metadata, chunks, FTS rows, and float32 embedding BLOBs.
+6. A question is embedded and ranked with local lexical and vector retrieval.
+7. Selected chunks are placed in a bounded prompt as untrusted evidence.
+8. A Foundry Local chat model answers in the question language.
+9. GroundNote validates citation IDs and renders sources from trusted metadata.
 
-These measurements were collected on the current development machine and may differ on other
-hardware.
+See [Architecture](docs/architecture.md) for the implemented component, indexing, RAG, model
+lifecycle, and refresh-ownership diagrams.
 
-## Planned Features
+## Architecture
 
-- Full native installer evaluation after the portable release workflow is proven.
-- Final demonstration and portfolio polish.
+```text
+Streamlit UI
+    -> UI workflows and application context
+    -> document validation/parsing -> chunking -> indexing
+    -> SQLite metadata + FTS5 + float32 embeddings
+    -> hybrid retrieval -> bounded RAG prompt -> Foundry Local chat
+    -> validated answer + trusted citations
+```
 
-## Technology Stack
-
-- Python 3.11
-- Streamlit
-- Microsoft Foundry Local
-- SQLite
-- NumPy
-- Pydantic
-- pytest
-- Ruff
-- mypy
-- uv
+Foundry-specific SDK behavior is isolated behind chat and embedding provider contracts. SQLite
+transactions protect document state changes, while slow local model inference runs outside write
+transactions. A document is Ready only after chunks, compatible embeddings, model metadata, and
+FTS rows pass the final integrity check.
 
 ## Requirements
 
-- Windows 11 (primary target).
-- Microsoft Foundry Local CLI: `winget install Microsoft.FoundryLocal`.
-- uv: `winget install --id=astral-sh.uv -e`.
-- Enough disk space for selected local models; models are not bundled with GroundNote.
-- Internet for initial dependency/model downloads; cached inference remains local.
+- Windows 11 is the primary validated platform.
+- Python 3.11, managed by [uv](https://docs.astral.sh/uv/).
+- Microsoft Foundry Local CLI.
+- Enough disk space for the selected local models; models are not bundled.
+- Internet for the initial dependency and model downloads.
 
-Python 3.11 is managed by uv, so a separate system Python installation is not required.
+The current verified development environment used Foundry Local CLI `0.10.2`,
+`foundry-local-sdk-winml` `1.2.3`, Python `3.11.15`, and uv `0.11.29`. Foundry Local is preview
+software, so its commands and catalog aliases may change.
 
-## Windows Setup
+## Quick Start on Windows
+
+Install prerequisites:
+
+```powershell
+winget install --id=astral-sh.uv -e
+winget install Microsoft.FoundryLocal
+```
+
+From the repository or extracted release directory:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/setup_windows.ps1
+powershell -ExecutionPolicy Bypass -File scripts/start_groundnote.ps1
 ```
 
-Setup is idempotent. It synchronizes locked dependencies, creates missing application directories,
-initializes/migrates SQLite, and runs the doctor. It does not replace existing user data and does
-not download Foundry models. Use `-DryRun` to inspect the workflow without changing the environment.
+Stop the scoped GroundNote session:
 
-## Environment Check
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/stop_groundnote.ps1
+```
+
+The launcher binds only to `127.0.0.1`, starts Foundry when needed, checks HTTP health, avoids
+duplicate GroundNote sessions, and records token-scoped metadata for safe shutdown. It does not
+download models automatically. Run the doctor if setup or startup reports a problem:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/doctor.ps1
 ```
 
-The doctor reports `OK`, `Warning`, or `Error` for the runtime, configuration, local data, SQLite,
-Foundry Local, cached required models, Streamlit port, application import, and Git cleanliness. It
-does not start Streamlit, load/download models, or print private paths and secrets.
-
-## Start and Stop
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/start_groundnote.ps1
-powershell -ExecutionPolicy Bypass -File scripts/stop_groundnote.ps1
-```
-
-The launcher binds to `127.0.0.1:8501`, starts Foundry when needed, validates readiness, prints the
-URL, and opens the browser. If 8501 belongs to another app, it selects the first available local
-port through 8510. Duplicate launches report the existing instance. The stop script validates PID,
-port, and a random launcher token, so it never broadly kills Python processes.
-
-Foundry is left unchanged on normal stop because another application may share it. To explicitly
-stop Foundry too, run `scripts/stop_groundnote.ps1 -StopFoundry`.
-
-## Troubleshooting
-
-- Run `scripts/doctor.ps1` first; a non-zero exit code means action is required.
-- If Foundry is stopped, run `foundry server start`. CLI `0.10.2` uses `server` commands.
-- The doctor reports missing aliases; models are downloaded only by an explicit
-  `foundry model download <alias>` command.
-- OCR is not supported; scanned PDFs need searchable text.
-- Browser stack traces and technical details remain hidden by default.
-
-## Local Development
+For development:
 
 ```powershell
 uv sync
 uv run streamlit run src/groundnote/app.py
-uv run ruff check .
-uv run mypy src
-uv run pytest -m "not foundry"
 ```
 
-Normal users should prefer `scripts/start_groundnote.ps1` so duplicate detection and scoped stop
-metadata are available.
+## Foundry Local Setup
 
-## Project Status
+Check the installed runtime and catalog:
 
-- Phase 0 completed.
-- Phase 1 completed.
-- Phase 2 completed.
-- Phase 3 completed.
-- Phase 4 completed.
-- Phase 5 completed locally.
-- Phase 6 completed locally.
-- Pre-Phase 7 UI readiness audit completed locally.
-- Phase 7 completed locally.
-- Phase 7.1 stabilization completed locally.
-- Phase 7.1.1 automatic-upload and Windows reliability patch completed locally.
-- Phase 7.2 performance, answer quality, router, and indexing optimization completed locally.
-- Phase 7.2.1 real-test stability, minimal document removal, inventory routing, and resource
-  control patch completed locally.
-- Phase 7.2.2 section retrieval, answer completion, and UI state fixes completed locally.
-- Phase 8 Knowledge Base and lightweight session management completed locally.
-- Phase 8.1 Knowledge Base action and operation-state stabilization completed locally.
-- Phase 9 packaging and release preparation completed locally.
-- Phase 9.1A grounding correctness, interrupted-index recovery, and managed-copy safety completed
-  locally.
-- Phase 9.1B single-chat-model lifecycle, indexing diagnostics, duplicate-work removal, and local
-  performance measurement completed locally.
-- Phase 9.1C bounded multi-file upload queue, sequential progress, isolated failure continuation,
-  and final model cleanup completed locally.
-- Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
-- Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
-- Local embeddings are generated and persisted for indexed documents.
-- Semantic retrieval returns ranked chunks with citation metadata.
-- Grounded single-turn RAG answer generation is implemented with citation validation.
-- The Streamlit interface accepts up to 10 files in one selection by default (50 MB per file and
-  100 MB combined), processes them sequentially, and shows a compact localized queue. One failed,
-  invalid, or duplicate file does not stop later files. Chat remains unavailable until the queue
-  finishes. Waiting files exist only in the current browser session; after a full refresh, select
-  any lost waiting files again.
-- Invalid short inputs do not call retrieval or local models. Low-confidence retrieval returns
-  insufficient evidence without chat generation. Obvious out-of-domain named-entity questions also
-  fail fast when retrieved chunks do not contain the requested entities.
-- Persistent database-backed conversation memory is intentionally not implemented.
-- Remove and clear-all delete GroundNote's database records and only the validated managed copies
-  created inside GroundNote's document directory. They never delete the original selected files or
-  unrelated local files. Re-index reuses the existing chunks and managed copy.
-- A document is Ready only when its chunks, compatible float32 embeddings, model metadata, and FTS
-  rows form a complete committed index. Interrupted or inconsistent documents are excluded from
-  retrieval and can be explicitly re-indexed.
+```powershell
+foundry --version
+foundry server status
+foundry status
+uv run python scripts/check_foundry.py
+```
 
-See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
-`docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and
-`docs/semantic-retrieval.md`, `docs/rag-generation.md`, `docs/prompt-safety.md`,
-`docs/citations-and-language.md`, `docs/streamlit-interface.md`, `docs/demo-workflow.md`,
-`docs/phase-7-1-stabilization.md`, `docs/phase-7-2-optimization.md`, and
-`docs/phase-7-2-1-real-test-stability.md`, and
-`docs/phase-7-2-2-section-retrieval-ui-stability.md`, and
-`docs/phase-8-knowledge-base-session-management.md`, `docs/phase-9-packaging-release.md`,
-`docs/phase-9-1b-model-lifecycle-performance.md`,
-`docs/phase-9-1c-multi-file-upload-queue.md`, `docs/packaging-strategy.md`, and
-`docs/release-checklist.md` for current behavior and limitations.
+If the installed service is stopped:
 
-## Privacy
+```powershell
+foundry server start
+```
 
-No cloud AI API is currently used. Model inference runs through Microsoft Foundry Local.
-First-time model downloads require internet, while cached inference is intended to work locally.
-User documents must not be committed to Git.
+The configured model aliases are:
 
-Local models can still make mistakes. Users should verify high-stakes answers against the cited
-source documents.
+- Default chat: `phi-3.5-mini`
+- Low-resource chat: `qwen2.5-0.5b`
+- Embeddings: `qwen3-embedding-0.6b`
 
-The interface supports English and Turkish. Answers follow the question language by default, with
-an optional session setting for English or Turkish. Chat history is session-only.
+Download a missing model only through an explicit Foundry command. GroundNote never silently uses a
+cloud provider or downloads a model merely to render the UI. See
+[Foundry Local setup](docs/foundry-local-setup.md) for Windows and macOS notes.
 
-GroundNote contains no telemetry or analytics. Setup, launcher, doctor, and archive tools do not
-upload documents, prompts, answers, embeddings, logs, or configuration. The portable archive
-excludes local databases, documents, logs, models, caches, `.env`, and test artifacts.
+## Supported Documents
 
-## Portable Release Archive
+| Type | Extensions | Preserved location metadata | Important limitation |
+| --- | --- | --- | --- |
+| PDF | `.pdf` | 1-based page number | No OCR; encrypted and image-only PDFs are rejected |
+| DOCX | `.docx` | Heading/section | Page numbers require layout rendering and are unavailable |
+| Text | `.txt` | Chunk order | UTF-8 and UTF-8 with BOM only |
+| Markdown | `.md`, `.markdown` | Heading/section | Embedded content is inert and is not fetched |
+
+GroundNote accepts one file at a time and processes it synchronously. The default compressed upload
+limit is 50 MB. See [Supported documents](docs/supported-documents.md) for the complete contract.
+
+## Usage
+
+1. Select a file in the sidebar. Indexing starts automatically.
+2. Wait until the document becomes **Ready**. Chat is disabled while indexing is active.
+3. Ask a factual, comparison, or summary question in English or Turkish.
+4. Check the compact sources below the answer.
+5. Use Knowledge Base controls to re-index or remove a document.
+6. Use **New chat** to clear only the in-memory conversation; indexed documents remain.
+
+For a repeatable demonstration, use [Demo questions](examples/demo-questions.md) and the
+[3–5 minute demo script](docs/demo-script.md).
+
+## Privacy and Offline Behavior
+
+- Documents, managed copies, SQLite data, embeddings, prompts, answers, and logs stay on the local
+  machine.
+- No Azure OpenAI, OpenAI API, telemetry, analytics, cloud sync, or remote fallback is used.
+- Initial dependency and model downloads require internet. Cached model inference is intended to
+  work offline.
+- Retrieved document text is treated as untrusted evidence, never as an instruction.
+- Logs exclude full document text, full questions, prompts, vectors, raw paths, and secrets.
+- The release archive excludes local databases, documents, logs, models, caches, `.env`, and test
+  artifacts.
+
+Local models can still be wrong. Verify high-stakes answers against the displayed source document.
+
+## Document Safety Limits
+
+Conservative release defaults are applied before local embedding:
+
+- 50 MB compressed upload size
+- 1,000 PDF pages
+- 5,000,000 extracted characters
+- 10,000 generated chunks
+- 200 MB total declared DOCX expansion
+- 50 MB per DOCX archive member
+- 100:1 DOCX compression ratio
+- 2,000 DOCX archive members
+
+DOCX packages are inspected as untrusted ZIP archives. Unsafe paths, duplicate/encrypted/special
+entries, unsafe XML declarations, and excessive expansion are rejected without extracting archive
+members to disk. Raising these limits increases CPU, memory, and indexing-time risk.
+
+## Performance Notes
+
+Measured results depend on hardware, model variants, document structure, and cache state. Current
+Foundry catalog variants on the validated Windows machine selected CPU execution providers.
+
+| Workload | Observed result |
+| --- | ---: |
+| `phi-3.5-mini` short benchmark response | 0.505 s after a 5.85 s load |
+| `qwen2.5-0.5b` short benchmark response | 0.135 s after a 2.64 s load |
+| `qwen3-embedding-0.6b` small benchmark batch | 1.58 s after a 2.43 s load |
+| 121-chunk real indexing benchmark | 83.833 s total; 82.300 s embedding |
+
+CPU embedding is currently the main indexing bottleneck. Indexing is synchronous, one document is
+uploaded at a time, and chat remains unavailable during indexing to avoid unsafe model overlap. See
+[Model benchmark](docs/model-benchmark.md) and
+[Model lifecycle and indexing performance](docs/model-lifecycle-performance.md) for context; these
+numbers are measurements, not performance guarantees.
+
+## Testing
+
+```powershell
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src
+uv run pytest -m "not foundry"
+uv run pytest --cov=groundnote --cov-report=term-missing
+uv run python scripts/smoke_ui_pipeline.py
+```
+
+Real Foundry validation is intentionally separate because it uses cached local models:
+
+```powershell
+uv run python scripts/check_foundry.py
+uv run python scripts/smoke_ui_real.py
+```
+
+Unit tests use fake providers and do not require model downloads. Release validation also covers
+PowerShell parsing, runtime-only setup, idempotency, scoped start/stop, deterministic archives,
+SHA-256 verification, extraction into a path containing spaces, and extracted-release startup.
+
+## Project Structure
+
+```text
+src/groundnote/
+  ai/           Foundry-neutral contracts and local provider adapters
+  documents/    validation, managed files, and parsers
+  chunking/     deterministic recursive chunking
+  embeddings/   float32 validation and batching
+  storage/      SQLite migrations, repositories, and Unit of Work
+  retrieval/    FTS5, vector scoring, and hybrid ranking
+  rag/          context, prompts, generation, and citation validation
+  services/     ingestion, indexing, integrity, and ownership
+  ui/           Streamlit state, components, and workflows
+scripts/        setup, doctor, launcher, smoke, benchmark, and release tools
+tests/          unit and integration tests
+docs/           architecture, setup, safety, release, and demo documentation
+examples/       original redistribution-safe demonstration material
+```
+
+## Release Archive
+
+Build the deterministic portable source archive:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/build_release_archive.ps1
 ```
 
-This produces `dist/groundnote-0.9.0.zip` with runtime source, locked dependencies, setup/launcher
-scripts, configuration example, documentation, changelog, and license. Foundry models and user data
-are never bundled. See `docs/packaging-strategy.md` and `docs/release-checklist.md`.
+This creates `dist/groundnote-1.0.0.zip` and `dist/groundnote-1.0.0.zip.sha256`. Verify the
+sidecar before extraction:
+
+```powershell
+$expected = (Get-Content dist/groundnote-1.0.0.zip.sha256).Split()[0]
+$actual = (Get-FileHash dist/groundnote-1.0.0.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Checksum mismatch" }
+```
+
+Generated ZIP and checksum files are release outputs and are intentionally ignored by Git.
+
+## Known Limitations
+
+- CPU embedding latency can be substantial for medium or large documents.
+- Indexing is synchronous; there is no persistent background queue or cancellation service.
+- Only one file can be uploaded at a time, and chat is unavailable during indexing.
+- No OCR, image, audio, video, or cloud-source ingestion.
+- No persistent conversation history or multi-user accounts.
+- A failed re-index does not preserve the previous complete vector version.
+- No native signed installer, automatic updater, or bundled models.
+- Launcher and portable-release validation are Windows-focused; macOS compatibility is best effort.
+- Foundry Local is preview software and its SDK/catalog may change.
+
+## Roadmap
+
+The 1.0.0 portfolio scope is complete. Potential future enhancements include OCR, cancellable
+background indexing with durable ownership, improved acceleration support, old-vector preservation
+during re-index, broader macOS validation, and a signed native installer. These are future ideas,
+not current features. See [Roadmap](ROADMAP.md).
+
+## Contributing
+
+Contributions should preserve the offline/privacy boundary, provider isolation, safe fixtures, and
+single-process resource controls. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull
+request.
+
+## Security
+
+Please use the private reporting guidance in [SECURITY.md](SECURITY.md). Never attach private
+documents, local databases, logs, prompts, or screenshots containing personal information to a
+public issue.
 
 ## License
 
-MIT License.
+GroundNote is available under the [MIT License](LICENSE).
+
+## Acknowledgements
+
+- [Microsoft Foundry Local](https://learn.microsoft.com/azure/ai-foundry/foundry-local/)
+- [Streamlit](https://streamlit.io/)
+- [uv](https://docs.astral.sh/uv/)
+- The open-source Python, SQLite, NumPy, pypdf, and python-docx communities

@@ -27,8 +27,10 @@ from groundnote.rag import (
     route_query,
 )
 from groundnote.services import (
+    ActiveIndexingRegistry,
     DocumentIndexingService,
     DocumentIndexIntegrityService,
+    IndexingOperationActiveError,
     PreEmbeddingIngestionService,
 )
 from groundnote.storage import SQLiteUnitOfWorkFactory
@@ -62,12 +64,14 @@ class DocumentWorkflow:
         ingestion_service: PreEmbeddingIngestionService,
         indexing_service: DocumentIndexingService,
         index_integrity_service: DocumentIndexIntegrityService,
+        indexing_registry: ActiveIndexingRegistry,
     ) -> None:
         self.settings = settings
         self.unit_of_work_factory = unit_of_work_factory
         self.ingestion_service = ingestion_service
         self.indexing_service = indexing_service
         self.index_integrity_service = index_integrity_service
+        self.indexing_registry = indexing_registry
         self.logger = get_logger(__name__)
 
     def process_and_index(
@@ -78,6 +82,30 @@ class DocumentWorkflow:
         on_stage: StageCallback | None = None,
         on_progress: ProgressCallback | None = None,
         precomputed_sha256: str | None = None,
+    ) -> UploadOutcome:
+        """Own and process exactly one upload pipeline in this server process."""
+        pipeline_token = self.indexing_registry.claim_pipeline()
+        try:
+            return self._process_and_index_owned(
+                original_filename=original_filename,
+                data=data,
+                on_stage=on_stage,
+                on_progress=on_progress,
+                precomputed_sha256=precomputed_sha256,
+                pipeline_token=pipeline_token,
+            )
+        finally:
+            self.indexing_registry.release_pipeline(pipeline_token)
+
+    def _process_and_index_owned(
+        self,
+        *,
+        original_filename: str,
+        data: bytes,
+        on_stage: StageCallback | None = None,
+        on_progress: ProgressCallback | None = None,
+        precomputed_sha256: str | None = None,
+        pipeline_token: str,
     ) -> UploadOutcome:
         """Process one confirmed upload synchronously through existing services."""
         if not original_filename:
@@ -127,7 +155,11 @@ class DocumentWorkflow:
             raise RuntimeError("Document ingestion did not reach the indexing boundary.")
         try:
             self._notify(on_stage, UploadStage.INDEXING)
-            indexing = self.indexing_service.index_document(document_id, metrics=metrics)
+            indexing = self.indexing_service.index_document(
+                document_id,
+                metrics=metrics,
+                pipeline_token=pipeline_token,
+            )
             self._notify(on_stage, UploadStage.FINALIZING)
             if indexing.status != DocumentStatus.INDEXED:
                 raise RuntimeError("Document indexing did not complete.")
@@ -149,13 +181,16 @@ class DocumentWorkflow:
     def list_documents(self) -> list[DocumentSummary]:
         """Read current safe document status without mutating or loading models."""
         self.index_integrity_service.reconcile(recover_transient=False)
+        active_document_ids = self.indexing_registry.active_document_ids()
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")
             documents = unit_of_work.documents.list_all()
             summaries = [
                 _summary(
-                    document,
+                    _as_actively_indexing(document)
+                    if document.id in active_document_ids
+                    else document,
                     chunk_count=unit_of_work.vectors.count_chunks_for_document(document.id),
                     embedded_count=unit_of_work.vectors.count_embedded_chunks_for_document(
                         document.id
@@ -168,12 +203,13 @@ class DocumentWorkflow:
     def get_document(self, document_id: str) -> DocumentSummary:
         """Read one document using a short transaction."""
         self.index_integrity_service.reconcile(recover_transient=False)
+        active = self.indexing_registry.is_active(document_id)
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")
             document = unit_of_work.documents.get_by_id(document_id)
             return _summary(
-                document,
+                _as_actively_indexing(document) if active else document,
                 chunk_count=unit_of_work.vectors.count_chunks_for_document(document.id),
                 embedded_count=unit_of_work.vectors.count_embedded_chunks_for_document(document.id),
             )
@@ -188,6 +224,8 @@ class DocumentWorkflow:
 
     def delete_document(self, document_id: str) -> DocumentSummary:
         """Delete index rows, then remove only GroundNote's validated managed copy."""
+        if self.indexing_registry.is_active():
+            raise IndexingOperationActiveError("An indexing operation is still active.")
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")
@@ -205,6 +243,8 @@ class DocumentWorkflow:
 
     def clear_all_documents(self) -> list[DocumentSummary]:
         """Clear index rows, then remove only managed copies represented by those rows."""
+        if self.indexing_registry.is_active():
+            raise IndexingOperationActiveError("An indexing operation is still active.")
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")
@@ -414,6 +454,17 @@ def _summary(document: Document, *, chunk_count: int, embedded_count: int) -> Do
         indexed_at=document.indexed_at,
         embedding_model=document.embedding_model,
         error_message=document.error_message,
+    )
+
+
+def _as_actively_indexing(document: Document) -> Document:
+    """Prefer conservative process ownership over a stale or transitional row view."""
+    return document.model_copy(
+        update={
+            "status": DocumentStatus.INDEXING,
+            "indexed_at": None,
+            "error_message": None,
+        }
     )
 
 

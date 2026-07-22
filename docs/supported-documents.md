@@ -15,23 +15,39 @@ Extensions are checked case-insensitively. Browser MIME types are not trusted as
 
 ## File Size Limit
 
-The per-file upload size limit is controlled by `GROUNDNOTE_MAX_UPLOAD_MB`, which defaults to `50`.
-The in-session queue defaults to 10 files and 100 MB combined through
-`GROUNDNOTE_MAX_UPLOAD_FILES` and `GROUNDNOTE_MAX_UPLOAD_TOTAL_MB`.
+The per-file upload size limit is controlled by `GROUNDNOTE_MAXIMUM_UPLOAD_SIZE_MB`, which defaults
+to `50`.
+GroundNote accepts one document at a time. It does not retain additional uploads in a background
+or browser-session queue.
+
+The compressed upload limit is only the first guard. GroundNote also defaults to at most
+`5,000,000` extracted characters and `10,000` searchable chunks per document. These limits are
+checked before local embedding, so an oversized document cannot become Ready or leave a usable
+partial index.
 
 ## PDF Limits
 
 PDF text is extracted page by page with 1-based page numbers. Blank pages are recorded as
 warnings. Encrypted PDFs are rejected. Corrupted PDFs are rejected with a safe user-facing error.
+GroundNote reads the PDF page count before page extraction and rejects documents over `1,000`
+pages. The cumulative extracted-character limit is checked after every page, and parser file
+handles are closed on both success and failure.
 
 OCR is not supported. Scanned or image-only PDFs may fail with a message explaining that no
 readable text could be extracted.
 
 ## DOCX Limits
 
-DOCX files are read as document content only. GroundNote extracts paragraphs, heading text, list
-text, and simple table text. It does not execute macros, follow links, load external references, or
-render page layout. DOCX page numbers are unavailable because they depend on layout rendering.
+DOCX files are treated as untrusted ZIP archives. Before reading document XML, GroundNote rejects
+encrypted, absolute, traversal, duplicate, symlink-like, special, malformed, or excessive archive
+members. Default bounds are `2,000` members, `200 MB` total declared expansion, `50 MB` per member,
+and a `100:1` per-member and total compression ratio. Only `word/document.xml` and optional
+`word/styles.xml` are read through bounded streams; embedded media and unrelated package parts are
+not extracted to disk.
+
+GroundNote extracts paragraphs, heading text, list text, and simple table text. It does not execute
+macros, follow links, load external references, or render page layout. DOCX page numbers are
+unavailable because they depend on layout rendering.
 
 ## TXT And Markdown Encoding
 

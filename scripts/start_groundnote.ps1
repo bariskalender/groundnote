@@ -3,15 +3,25 @@ param(
     [ValidateRange(1, 65535)]
     [int]$Port = 8501,
     [switch]$NoBrowser,
-    [switch]$Background
+    [switch]$Background,
+    [string]$RuntimeDirectoryOverride = ""
 )
 
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$RuntimeDirectory = Join-Path $env:LOCALAPPDATA "GroundNote\runtime"
+$RuntimeDirectory = if ([string]::IsNullOrWhiteSpace($RuntimeDirectoryOverride)) {
+    Join-Path $env:LOCALAPPDATA "GroundNote\runtime"
+} else {
+    $RuntimeDirectoryOverride
+}
 $SessionFile = Join-Path $RuntimeDirectory "groundnote-session.json"
 $FoundryStarted = $false
+$Launcher = $null
+$OwnedListenerPid = $null
+$Token = $null
+$SessionMetadataWritten = $false
+$SessionTempFile = $null
 
 function Get-Listener([int]$CandidatePort) {
     return Get-NetTCPConnection -LocalAddress "127.0.0.1" -LocalPort $CandidatePort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -36,6 +46,34 @@ function Get-VerifiedSession {
         return $null
     }
     return $null
+}
+
+function Stop-OwnedLaunchProcess([Nullable[int]]$ListenerPid, [Nullable[int]]$LauncherPid, [string]$SessionToken) {
+    if ([string]::IsNullOrWhiteSpace($SessionToken)) {
+        return
+    }
+    $TokenProcesses = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+        $null -ne $_.CommandLine -and $_.CommandLine -like "*$SessionToken*"
+    } | Select-Object -ExpandProperty ProcessId
+    $Candidates = @($ListenerPid, $LauncherPid) + @($TokenProcesses) |
+        Where-Object { $null -ne $_ } |
+        Select-Object -Unique
+    foreach ($Candidate in $Candidates) {
+        $Process = Get-CimInstance Win32_Process -Filter "ProcessId = $([int]$Candidate)" -ErrorAction SilentlyContinue
+        if ($null -eq $Process -or $Process.CommandLine -notlike "*$SessionToken*") {
+            continue
+        }
+        Stop-Process -Id ([int]$Candidate) -ErrorAction SilentlyContinue
+        try {
+            Wait-Process -Id ([int]$Candidate) -Timeout 5 -ErrorAction Stop
+        }
+        catch {
+            $StillOwned = Get-CimInstance Win32_Process -Filter "ProcessId = $([int]$Candidate)" -ErrorAction SilentlyContinue
+            if ($null -ne $StillOwned -and $StillOwned.CommandLine -like "*$SessionToken*") {
+                Stop-Process -Id ([int]$Candidate) -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }
 
 try {
@@ -84,14 +122,14 @@ try {
 
     Push-Location $ProjectRoot
     try {
-        & $Uv.Source run python -m groundnote doctor --port $Port
+        & $Uv.Source run --no-dev python -m groundnote doctor --port $Port
         if ($LASTEXITCODE -ne 0) {
             throw "GroundNote is not ready. Fix the doctor errors before starting the app."
         }
 
         $Token = [Guid]::NewGuid().ToString("N")
         $Arguments = @(
-            "run", "python", "-m", "streamlit", "run", "src/groundnote/app.py",
+            "run", "--no-dev", "python", "-m", "streamlit", "run", "src/groundnote/app.py",
             "--server.address", "127.0.0.1",
             "--server.port", $Port,
             "--server.headless", "true",
@@ -114,21 +152,44 @@ try {
             $Listener = Get-Listener -CandidatePort $Port
         } while ($null -eq $Listener -and -not $Launcher.HasExited -and (Get-Date) -lt $Deadline)
         if ($null -eq $Listener) {
-            if (-not $Launcher.HasExited) {
-                Stop-Process -Id $Launcher.Id -Force -ErrorAction SilentlyContinue
-            }
             throw "Streamlit did not start within 30 seconds. Run scripts/doctor.ps1 for guidance."
         }
+        $OwnedListenerPid = [int]$Listener.OwningProcess
 
-        New-Item -ItemType Directory -Path $RuntimeDirectory -Force | Out-Null
-        [ordered]@{
-            pid = [int]$Listener.OwningProcess
-            launcherPid = [int]$Launcher.Id
-            port = [int]$Port
-            token = $Token
-            startedAtUtc = [DateTime]::UtcNow.ToString("o")
-            foundryStartedByLauncher = $FoundryStarted
-        } | ConvertTo-Json | Set-Content -LiteralPath $SessionFile -Encoding UTF8
+        $Healthy = $false
+        do {
+            try {
+                $Health = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:$Port/_stcore/health" -TimeoutSec 2
+                $Healthy = $Health.StatusCode -eq 200
+            }
+            catch {
+                $Healthy = $false
+            }
+            if (-not $Healthy) {
+                Start-Sleep -Milliseconds 300
+            }
+        } while (-not $Healthy -and -not $Launcher.HasExited -and (Get-Date) -lt $Deadline)
+        if (-not $Healthy) {
+            throw "Streamlit did not pass its local health check. Run scripts/doctor.ps1 for guidance."
+        }
+
+        try {
+            New-Item -ItemType Directory -Path $RuntimeDirectory -Force | Out-Null
+            $SessionTempFile = Join-Path $RuntimeDirectory "groundnote-session.$Token.tmp"
+            [ordered]@{
+                pid = $OwnedListenerPid
+                launcherPid = [int]$Launcher.Id
+                port = [int]$Port
+                token = $Token
+                startedAtUtc = [DateTime]::UtcNow.ToString("o")
+                foundryStartedByLauncher = $FoundryStarted
+            } | ConvertTo-Json | Set-Content -LiteralPath $SessionTempFile -Encoding UTF8
+            Move-Item -LiteralPath $SessionTempFile -Destination $SessionFile -Force
+            $SessionMetadataWritten = $true
+        }
+        catch {
+            throw "GroundNote runtime metadata could not be written. The launched process was stopped safely."
+        }
 
         $Url = "http://127.0.0.1:$Port/"
         Write-Host "GroundNote is running locally at $Url"
@@ -152,6 +213,16 @@ try {
     }
 }
 catch {
+    if (-not $SessionMetadataWritten) {
+        $LauncherPid = if ($null -ne $Launcher) { [Nullable[int]]$Launcher.Id } else { $null }
+        Stop-OwnedLaunchProcess -ListenerPid $OwnedListenerPid -LauncherPid $LauncherPid -SessionToken $Token
+        if ($null -ne $SessionTempFile -and (Test-Path -LiteralPath $SessionTempFile)) {
+            Remove-Item -LiteralPath $SessionTempFile -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path -LiteralPath $SessionFile) {
+            Remove-Item -LiteralPath $SessionFile -Force -ErrorAction SilentlyContinue
+        }
+    }
     if ($FoundryStarted) {
         & foundry server stop | Out-Null
     }

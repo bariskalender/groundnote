@@ -13,6 +13,7 @@ from groundnote.documents.errors import (
     DocumentError,
     DuplicateDocumentError,
     EmptyDocumentError,
+    ExtractedTextLimitError,
     FileTooLargeError,
     UnsafeFileError,
     UnsupportedFileTypeError,
@@ -49,7 +50,7 @@ class DocumentProcessingService:
     ) -> None:
         self.settings = settings
         self.duplicate_lookup = duplicate_lookup
-        self.registry = registry or default_parser_registry()
+        self.registry = registry or default_parser_registry(settings)
         self.logger = get_logger(__name__)
 
     def check_duplicate(self, sha256: str) -> DuplicateCheckResult:
@@ -148,10 +149,11 @@ class DocumentProcessingService:
                 duration_ms=_elapsed_ms(started),
             )
             raise
+        extracted_character_count = sum(len(section.text) for section in parsed.sections)
+        if extracted_character_count > self.settings.maximum_extracted_characters:
+            raise ExtractedTextLimitError()
         if metrics is not None:
-            metrics.extracted_character_count = sum(
-                len(section.text) for section in parsed.sections
-            )
+            metrics.extracted_character_count = extracted_character_count
             metrics.page_count = parsed.page_count
         self._log_result(
             "document_parsed",

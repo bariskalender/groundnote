@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from groundnote.config import Settings, load_settings
 from groundnote.services.index_integrity import DocumentIndexIntegrityService
+from groundnote.services.indexing_ownership import ActiveIndexingRegistry
 from groundnote.storage import MigrationRunner, SQLiteConnectionFactory, SQLiteUnitOfWorkFactory
 from groundnote.utils import configure_logging, get_logger, safe_log_info
 
@@ -16,6 +17,7 @@ class ApplicationDependencies:
 
     settings: Settings
     unit_of_work_factory: SQLiteUnitOfWorkFactory
+    indexing_registry: ActiveIndexingRegistry
 
 
 def initialize_application(settings: Settings | None = None) -> ApplicationDependencies:
@@ -32,9 +34,11 @@ def initialize_application(settings: Settings | None = None) -> ApplicationDepen
     with connection_factory.open() as connection:
         applied = MigrationRunner().apply(connection)
     unit_of_work_factory = SQLiteUnitOfWorkFactory(resolved_settings.database_path)
+    indexing_registry = ActiveIndexingRegistry(resolved_settings.database_path)
     recovery = DocumentIndexIntegrityService(
         settings=resolved_settings,
         unit_of_work_factory=unit_of_work_factory,
+        indexing_registry=indexing_registry,
     ).reconcile()
     safe_log_info(
         logger,
@@ -45,4 +49,5 @@ def initialize_application(settings: Settings | None = None) -> ApplicationDepen
     return ApplicationDependencies(
         settings=resolved_settings,
         unit_of_work_factory=unit_of_work_factory,
+        indexing_registry=indexing_registry,
     )

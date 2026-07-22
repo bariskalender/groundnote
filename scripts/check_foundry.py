@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from groundnote.ai.foundry_manager import FoundryManager
+from groundnote.diagnostics import sanitize_executable_name
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FOUNDARY_DATA_DIR = PROJECT_ROOT / ".foundry-local"
@@ -27,7 +28,7 @@ def main() -> int:
         },
         "python_version": platform.python_version(),
         "uv_version": run_text([find_executable("uv"), "--version"]),
-        "foundry_cli_path": shutil.which("foundry"),
+        "foundry_cli_executable": sanitize_executable_name(shutil.which("foundry")),
         "foundry_version": run_text(["foundry", "--version"]),
         "foundry_status": run_text(["foundry", "status"]),
         "foundry_server_status": run_text(["foundry", "server", "status"]),
@@ -60,7 +61,7 @@ def main() -> int:
             for alias in ("phi-3.5-mini", "qwen2.5-0.5b", "qwen3-embedding-0.6b")
         }
     except Exception as exc:
-        result["models"]["error"] = f"{type(exc).__name__}: {exc}"
+        result["models"]["error"] = type(exc).__name__
 
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0 if "error" not in result["models"] else 1
@@ -78,8 +79,8 @@ def run_text(command: list[str], timeout_seconds: int = 60) -> dict[str, Any]:
             text=True,
             timeout=timeout_seconds,
         )
-    except subprocess.TimeoutExpired as exc:
-        return {"available": True, "timeout": True, "output": str(exc)}
+    except subprocess.TimeoutExpired:
+        return {"available": True, "timeout": True, "output": ""}
 
     output_parts = (completed.stdout.strip(), completed.stderr.strip())
     output = "\n".join(part for part in output_parts if part)

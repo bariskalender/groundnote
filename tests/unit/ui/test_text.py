@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from string import Formatter
-
 from groundnote.ui.text import t
 
 
@@ -16,41 +14,12 @@ def test_phase_eight_knowledge_base_text_is_localized() -> None:
     assert t("delete_document", "tr") == "Kaldır"
     assert "re-indexed successfully" in t("document_reindexed", "en")
     assert "başarıyla yeniden indekslendi" in t("document_reindexed", "tr")
-    assert "Another document operation" in t("operation_busy_upload", "en")
-    assert "Başka bir belge işlemi" in t("operation_busy_upload", "tr")
-
-
-def test_phase_nine_one_c_queue_text_has_translation_and_placeholder_parity() -> None:
-    keys = (
-        "upload_limit",
-        "upload_file_count_limit",
-        "upload_total_size_limit",
-        "upload_queue",
-        "queue_overview",
-        "queue_session_notice",
-        "queue_item_position",
-        "queue_position",
-        "cancel_waiting_item",
-        "clear_queue_results",
-        "queue_memory_details",
-        "queue_summary_counts",
-        "queue_summary_duration",
-        "chat_busy_queue",
+    assert t("operation_busy_upload", "en") == (
+        "GroundNote is indexing a document. Upload another file after it finishes."
     )
-    for key in keys:
-        english = t(key, "en")
-        turkish = t(key, "tr")
-        assert english != key
-        assert turkish != key
-        assert _format_fields(english) == _format_fields(turkish)
-
-    assert "tamamlandığında" in t("chat_busy_queue", "tr")
-
-
-def _format_fields(template: str) -> set[str]:
-    return {
-        field_name for _, field_name, _, _ in Formatter().parse(template) if field_name is not None
-    }
+    assert t("operation_busy_upload", "tr") == (
+        "GroundNote bir belgeyi indeksliyor. İşlem tamamlandıktan sonra başka bir dosya yükleyin."
+    )
 
 
 def test_phase_nine_one_recovery_and_cleanup_text_is_localized() -> None:

@@ -356,7 +356,7 @@ advanced Knowledge Base screens.
 Questions asking which documents are uploaded, indexed, grouped, or described are application
 inventory requests rather than normal RAG questions. GroundNote answers them from safe indexed
 document metadata and filename-derived topic hints. This avoids accidentally retrieving an old
-document such as `Phases.docx` and summarizing its content as if it were the document inventory.
+unrelated older document and summarizing its content as if it were the document inventory.
 The inventory path does not call the embedding model or chat model and does not fabricate page
 citations.
 
@@ -426,8 +426,9 @@ prompts, vectors, and exceptions are never stored in the flash state.
 - Status: Accepted
 - Date: 2026-07-22
 
-GroundNote `0.9.0` uses an allowlisted, deterministic source ZIP with uv-managed Python 3.11 and
-PowerShell setup/launcher scripts. Foundry Local and its cached models remain external prerequisites.
+GroundNote first adopted an allowlisted, deterministic source ZIP for the 0.9.0 packaging
+foundation; the 1.0.0 release keeps it with uv-managed Python 3.11 and PowerShell setup/launcher
+scripts. Foundry Local and its cached models remain external prerequisites.
 This avoids fragile Streamlit/preview-SDK freezer hooks, unsigned executable antivirus false
 positives, model bundling, and premature installer upgrade complexity. PyInstaller, Nuitka,
 Briefcase, MSI, and MSIX remain documented future options after clean-machine, signing, licensing,
@@ -527,7 +528,8 @@ rather than being approximated through Streamlit reruns.
 - Date: 2026-07-22
 
 The existing batch size of `16` already reduced a 121-chunk operation to eight provider calls with
-stable ordering. Phase 9.1B keeps that conservative default and validates configuration from `1`
+stable ordering. The lifecycle/performance hardening keeps that conservative default and validates
+configuration from `1`
 through `64`; it does not maximize batch size based on a single machine. Later-batch failures commit
 no partial vectors and unload the provider.
 
@@ -538,10 +540,11 @@ and cleans GroundNote-owned models afterward.
 
 ## ADR-0048: Own a Bounded Sequential Upload Queue in the Streamlit Session
 
-- Status: Accepted
+- Status: Superseded by ADR-0049
 - Date: 2026-07-22
 
-GroundNote owns upload queue state in the current Streamlit session. A stable submission identity
+The superseded design owned upload queue state in the current Streamlit session. A stable
+submission identity
 and opaque item identities prevent normal reruns from duplicating work. The queue retains one
 bounded immutable byte buffer per waiting item because Streamlit's uploader object is not a durable
 execution source; terminal outcomes release that buffer immediately. Queue metadata never contains
@@ -554,6 +557,83 @@ are isolated so later items continue. Persisted failures retry through the exist
 integrity contract; pre-persistence failures require the user to reselect the file.
 
 The queue is intentionally not durable across a full browser session refresh or machine restart.
-Phase 9.1A database recovery remains authoritative for interrupted persisted records. A background
+The database recovery contract remains authoritative for interrupted persisted records. A background
 worker, parallel indexing, durable job service, and active-operation cancellation would introduce
-new ownership and recovery semantics and remain outside Phase 9.1C.
+new ownership and recovery semantics and remained outside that discarded queue design.
+
+## ADR-0049: Prefer Single-file Upload and Process-local Indexing Ownership
+
+- Status: Accepted
+- Date: 2026-07-22
+
+Manual product testing showed that retaining multiple browser uploads increased UI and session
+complexity without reducing CPU-bound embedding time. GroundNote therefore accepts one file at a
+time, retains no waiting document bytes, resets the uploader after every terminal outcome, and has
+no background worker or persistent queue. The existing per-file size limit remains authoritative.
+
+An `INDEXING` database row alone cannot distinguish genuinely active work from a process that died.
+A database-scoped in-process registry now gives each synchronous indexing run an opaque ownership
+token. Browser refreshes share that owner, so bootstrap does not recover live work as interrupted;
+a true process restart clears the owner and preserves stale-state recovery.
+
+Ready requires the complete final transaction and released ownership. While any indexing owner is
+active, chat and document mutations are blocked and retrieval returns no document evidence, which
+also preserves the no-overlap model lifecycle contract. This is deliberately local to the current
+single-process Streamlit architecture and is not a durable job system.
+
+## ADR-0050: Bound Untrusted Document Expansion Before Embedding
+
+- Status: Accepted
+- Date: 2026-07-22
+
+A compressed upload-size limit cannot bound PDF work, DOCX expansion, extracted text, or generated
+chunks. GroundNote therefore applies conservative validated defaults of 1,000 PDF pages, 5,000,000
+extracted characters, 10,000 chunks, 200 MB DOCX declared expansion, 50 MB per DOCX member, a 100:1
+compression ratio, and 2,000 DOCX members. Parsing stops when an incremental limit is crossed, and
+the chunk limit is checked before persistence or embedding.
+
+DOCX is treated as an untrusted ZIP archive. GroundNote validates central-directory metadata and
+member paths, rejects encryption, special/link-like entries, duplicate names, unsafe XML entity
+declarations, and excessive expansion, then reads only bounded `word/document.xml` and optional
+`word/styles.xml` streams. It never extracts archive members to the filesystem. A pre-persistence
+limit failure removes the temporary managed copy, loads no model, releases indexing ownership, and
+cannot produce a searchable or Ready document.
+
+## ADR-0051: Keep Release Setup Runtime-only and Make Launcher Startup Authoritative
+
+- Status: Accepted
+- Date: 2026-07-22
+
+Portable-release setup uses `uv sync --no-dev`, and release-script `uv run` calls retain
+`--no-dev`; developers continue to use the default `uv sync` development group. A present but
+stopped or starting Foundry service is a doctor warning rather than a setup blocker because the
+token-scoped launcher owns service startup. Missing CLI/runtime requirements, invalid
+configuration, inaccessible storage, and occupied requested ports remain blocking. Missing cached
+model aliases are actionable warnings and are never downloaded silently.
+
+Launcher metadata is written atomically through a token-scoped temporary file after an HTTP health
+check. Any startup or metadata failure terminates only processes whose command line carries that
+invocation's token and removes partial metadata. Portable archives reject source-link/path boundary
+violations, exclude all ZIP/checksum inputs, and emit a deterministic filename-only SHA-256
+sidecar next to the reproducible ZIP.
+
+## ADR-0052: Publish 1.0.0 as a Portable, Evidence-Backed Portfolio Release
+
+- Status: Accepted
+- Date: 2026-07-22
+
+GroundNote 1.0.0 is the completed portfolio baseline. The public repository will explain actual
+implemented behavior through a concise README, current architecture diagrams, original synthetic
+demo material, measured performance, honest limitations, contribution/security guidance, and
+privacy-safe screenshots. Temporary stabilization labels are consolidated into their owning public
+phases; useful architectural decisions and historical changelog entries remain preserved.
+
+The MIT license already selected by the repository remains in force. The portable deterministic
+source ZIP remains the release format because Foundry Local, cached models, and uv are external
+prerequisites and native installer signing/upgrade validation is incomplete. The 1.0.0 archive adds
+public contribution/security files and demo examples to its allowlist while continuing to exclude
+tests, databases, user documents, logs, models, caches, secrets, and generated ZIP/checksum inputs.
+
+Publication uses one final commit containing the reviewed release-hardening work and the Phase 10
+portfolio changes. A normal push to `main` is authorized only after the complete validation matrix
+passes. Tags and GitHub Releases remain separate actions requiring later explicit authorization.
