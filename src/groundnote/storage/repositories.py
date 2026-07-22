@@ -58,6 +58,27 @@ class LexicalChunkMatch:
     rank: float
 
 
+@dataclass(frozen=True)
+class DocumentIndexIntegrity:
+    """Counts used to prove that one persisted document index is complete."""
+
+    chunk_count: int
+    embedded_chunk_count: int
+    compatible_embedding_count: int
+    fts_row_count: int
+    valid_fts_row_count: int
+
+    @property
+    def is_complete(self) -> bool:
+        return (
+            self.chunk_count > 0
+            and self.embedded_chunk_count == self.chunk_count
+            and self.compatible_embedding_count == self.chunk_count
+            and self.fts_row_count == self.chunk_count
+            and self.valid_fts_row_count == self.chunk_count
+        )
+
+
 class DocumentRepository(Protocol):
     """Document persistence contract."""
 
@@ -142,6 +163,16 @@ class VectorRepository(Protocol):
     def clear_embeddings_for_document(self, document_id: str) -> None: ...
     def count_indexed_chunks(self) -> int: ...
     def count_embedded_chunks_for_document(self, document_id: str) -> int: ...
+    def index_integrity(
+        self,
+        document_id: str,
+        *,
+        embedding_model: str,
+        embedding_dimension: int,
+        embedding_version: str,
+        embedding_dtype: str,
+    ) -> DocumentIndexIntegrity: ...
+    def delete_fts_for_document(self, document_id: str) -> None: ...
     def delete_for_document(self, document_id: str) -> None: ...
     def count_chunks(self) -> int: ...
     def count_chunks_for_document(self, document_id: str) -> int: ...
@@ -269,7 +300,7 @@ class SQLiteVectorRepository:
                 """,
                 [_chunk_values(chunk, embedding) for chunk, embedding in chunks],
             )
-            self._upsert_fts_rows([chunk for chunk, _ in chunks])
+            self._upsert_fts_rows([chunk for chunk, embedding in chunks if embedding is not None])
         except sqlite3.Error as exc:
             raise StorageError("Could not add document chunks.") from exc
 
@@ -358,7 +389,7 @@ class SQLiteVectorRepository:
         limit: int | None = None,
     ) -> list[SearchableChunkEmbedding]:
         clauses = [
-            "d.status = ?",
+            *_complete_index_clauses(),
             "c.embedding IS NOT NULL",
             "c.embedding_model = ?",
             "c.embedding_version = ?",
@@ -414,7 +445,7 @@ class SQLiteVectorRepository:
             return []
         clauses = [
             "document_chunks_fts MATCH ?",
-            "d.status = ?",
+            *_complete_index_clauses(),
             "c.embedding IS NOT NULL",
             "c.embedding_model = ?",
             "c.embedding_version = ?",
@@ -491,7 +522,7 @@ class SQLiteVectorRepository:
             FROM document_chunks c
             JOIN documents d ON d.id = c.document_id
             WHERE c.id IN ({placeholders})
-              AND d.status = ?
+              AND {" AND ".join(_complete_index_clauses())}
               AND c.embedding IS NOT NULL
               AND c.embedding_model = ?
               AND c.embedding_version = ?
@@ -510,7 +541,7 @@ class SQLiteVectorRepository:
         file_types: list[SupportedFileType] | None = None,
         limit: int = 5000,
     ) -> list[str]:
-        clauses = ["d.status = ?"]
+        clauses = list(_complete_index_clauses())
         parameters: list[object] = [DocumentStatus.INDEXED.value]
         if document_ids is not None:
             if not document_ids:
@@ -543,12 +574,15 @@ class SQLiteVectorRepository:
         return sorted(terms)
 
     def delete_for_document(self, document_id: str) -> None:
-        self._connection.execute(
-            "DELETE FROM document_chunks_fts WHERE document_id = ?",
-            (document_id,),
-        )
+        self.delete_fts_for_document(document_id)
         self._connection.execute(
             "DELETE FROM document_chunks WHERE document_id = ?",
+            (document_id,),
+        )
+
+    def delete_fts_for_document(self, document_id: str) -> None:
+        self._connection.execute(
+            "DELETE FROM document_chunks_fts WHERE document_id = ?",
             (document_id,),
         )
 
@@ -581,6 +615,7 @@ class SQLiteVectorRepository:
             """,
             (document_id,),
         )
+        self.delete_fts_for_document(document_id)
 
     def _upsert_fts_rows(self, chunks: list[DocumentChunk]) -> None:
         if not chunks:
@@ -592,30 +627,27 @@ class SQLiteVectorRepository:
             tuple(document_ids),
         ).fetchall()
         filenames = {str(row["id"]): str(row["original_filename"]) for row in rows}
-        try:
-            self._connection.executemany(
-                """
-                INSERT OR REPLACE INTO document_chunks_fts (
-                    rowid, chunk_id, document_id, content, section_title, source_filename
-                )
-                SELECT rowid, ?, ?, ?, ?, ?
-                FROM document_chunks
-                WHERE id = ?
-                """,
-                [
-                    (
-                        chunk.id,
-                        chunk.document_id,
-                        chunk.content,
-                        chunk.section_title or "",
-                        filenames.get(chunk.document_id, ""),
-                        chunk.id,
-                    )
-                    for chunk in chunks
-                ],
+        self._connection.executemany(
+            """
+            INSERT OR REPLACE INTO document_chunks_fts (
+                rowid, chunk_id, document_id, content, section_title, source_filename
             )
-        except sqlite3.OperationalError:
-            return
+            SELECT rowid, ?, ?, ?, ?, ?
+            FROM document_chunks
+            WHERE id = ?
+            """,
+            [
+                (
+                    chunk.id,
+                    chunk.document_id,
+                    chunk.content,
+                    chunk.section_title or "",
+                    filenames.get(chunk.document_id, ""),
+                    chunk.id,
+                )
+                for chunk in chunks
+            ],
+        )
 
     def _sync_fts_rows_for_chunk_ids(self, chunk_ids: list[str]) -> None:
         if not chunk_ids:
@@ -650,6 +682,98 @@ class SQLiteVectorRepository:
                 (document_id,),
             ).fetchone()[0]
         )
+
+    def index_integrity(
+        self,
+        document_id: str,
+        *,
+        embedding_model: str,
+        embedding_dimension: int,
+        embedding_version: str,
+        embedding_dtype: str,
+    ) -> DocumentIndexIntegrity:
+        row = self._connection.execute(
+            """
+            SELECT
+                (SELECT COUNT(*) FROM document_chunks WHERE document_id = ?) AS chunk_count,
+                (SELECT COUNT(*) FROM document_chunks
+                 WHERE document_id = ? AND embedding IS NOT NULL) AS embedded_chunk_count,
+                (SELECT COUNT(*) FROM document_chunks
+                 WHERE document_id = ?
+                   AND embedding IS NOT NULL
+                   AND embedding_model = ?
+                   AND embedding_dimension = ?
+                   AND embedding_version = ?
+                   AND embedding_dtype = ?) AS compatible_embedding_count,
+                (SELECT COUNT(*) FROM document_chunks_fts
+                 WHERE document_id = ?) AS fts_row_count,
+                (SELECT COUNT(DISTINCT f.chunk_id)
+                 FROM document_chunks_fts f
+                 JOIN document_chunks c
+                   ON c.id = f.chunk_id AND c.document_id = f.document_id
+                 WHERE f.document_id = ?) AS valid_fts_row_count
+            """,
+            (
+                document_id,
+                document_id,
+                document_id,
+                embedding_model,
+                embedding_dimension,
+                embedding_version,
+                embedding_dtype,
+                document_id,
+                document_id,
+            ),
+        ).fetchone()
+        return DocumentIndexIntegrity(
+            chunk_count=int(row["chunk_count"]),
+            embedded_chunk_count=int(row["embedded_chunk_count"]),
+            compatible_embedding_count=int(row["compatible_embedding_count"]),
+            fts_row_count=int(row["fts_row_count"]),
+            valid_fts_row_count=int(row["valid_fts_row_count"]),
+        )
+
+
+def _complete_index_clauses() -> tuple[str, ...]:
+    """Return SQL predicates that exclude every partial or inconsistent document index."""
+    return (
+        "d.status = ?",
+        "d.indexed_at IS NOT NULL",
+        "d.embedding_model IS NOT NULL",
+        "d.embedding_dimension IS NOT NULL",
+        "d.embedding_version IS NOT NULL",
+        "EXISTS (SELECT 1 FROM document_chunks dc WHERE dc.document_id = d.id)",
+        """
+        NOT EXISTS (
+            SELECT 1
+            FROM document_chunks dc
+            WHERE dc.document_id = d.id
+              AND (
+                  dc.embedding IS NULL
+                  OR dc.embedding_model != d.embedding_model
+                  OR dc.embedding_dimension != d.embedding_dimension
+                  OR dc.embedding_version != d.embedding_version
+                  OR dc.embedding_dtype != 'float32'
+              )
+        )
+        """,
+        """
+        NOT EXISTS (
+            SELECT 1
+            FROM document_chunks dc
+            WHERE dc.document_id = d.id
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM document_chunks_fts f
+                  WHERE f.document_id = d.id AND f.chunk_id = dc.id
+              )
+        )
+        """,
+        """
+        (SELECT COUNT(*) FROM document_chunks_fts f WHERE f.document_id = d.id)
+        = (SELECT COUNT(*) FROM document_chunks dc WHERE dc.document_id = d.id)
+        """,
+    )
 
 
 def _document_values(document: Document) -> tuple[object, ...]:

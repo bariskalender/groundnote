@@ -16,7 +16,11 @@ from groundnote.embeddings import EmbeddingService
 from groundnote.embeddings.models import BatchEmbeddingProvider
 from groundnote.rag import RagService
 from groundnote.retrieval.service import SemanticRetrievalService
-from groundnote.services import DocumentIndexingService, PreEmbeddingIngestionService
+from groundnote.services import (
+    DocumentIndexingService,
+    DocumentIndexIntegrityService,
+    PreEmbeddingIngestionService,
+)
 from groundnote.storage import SQLiteConnectionFactory, SQLiteUnitOfWorkFactory
 from groundnote.ui.foundry_status import FoundryStatusService
 from groundnote.ui.workflows import DocumentWorkflow, QuestionWorkflow
@@ -38,6 +42,7 @@ class ApplicationContext:
     document_processing_service: DocumentProcessingService
     ingestion_service: PreEmbeddingIngestionService
     indexing_service: DocumentIndexingService
+    index_integrity_service: DocumentIndexIntegrityService
     retrieval_service: SemanticRetrievalService
     rag_service: RagService
     fast_rag_service: RagService
@@ -89,6 +94,10 @@ def build_application_context(
         unit_of_work_factory=unit_of_work_factory,
         embedding_service=embedding_service,
     )
+    index_integrity_service = DocumentIndexIntegrityService(
+        settings=resolved_settings,
+        unit_of_work_factory=unit_of_work_factory,
+    )
     retrieval_service = SemanticRetrievalService(
         settings=resolved_settings,
         connection_factory=connection_factory,
@@ -114,6 +123,7 @@ def build_application_context(
         unit_of_work_factory=unit_of_work_factory,
         ingestion_service=ingestion_service,
         indexing_service=indexing_service,
+        index_integrity_service=index_integrity_service,
     )
     question_workflow = QuestionWorkflow(
         document_workflow=document_workflow,
@@ -136,6 +146,7 @@ def build_application_context(
         document_processing_service=document_processing_service,
         ingestion_service=ingestion_service,
         indexing_service=indexing_service,
+        index_integrity_service=index_integrity_service,
         retrieval_service=retrieval_service,
         rag_service=rag_service,
         fast_rag_service=fast_rag_service,

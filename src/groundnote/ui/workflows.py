@@ -19,7 +19,11 @@ from groundnote.rag import (
     deterministic_response,
     route_query,
 )
-from groundnote.services import DocumentIndexingService, PreEmbeddingIngestionService
+from groundnote.services import (
+    DocumentIndexingService,
+    DocumentIndexIntegrityService,
+    PreEmbeddingIngestionService,
+)
 from groundnote.storage import SQLiteUnitOfWorkFactory
 from groundnote.ui.errors import InvalidFilterError, NoFileSelectedError
 from groundnote.ui.models import (
@@ -48,11 +52,13 @@ class DocumentWorkflow:
         unit_of_work_factory: SQLiteUnitOfWorkFactory,
         ingestion_service: PreEmbeddingIngestionService,
         indexing_service: DocumentIndexingService,
+        index_integrity_service: DocumentIndexIntegrityService,
     ) -> None:
         self.settings = settings
         self.unit_of_work_factory = unit_of_work_factory
         self.ingestion_service = ingestion_service
         self.indexing_service = indexing_service
+        self.index_integrity_service = index_integrity_service
 
     def process_and_index(
         self,
@@ -121,6 +127,7 @@ class DocumentWorkflow:
 
     def list_documents(self) -> list[DocumentSummary]:
         """Read current safe document status without mutating or loading models."""
+        self.index_integrity_service.reconcile(recover_transient=False)
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")
@@ -139,6 +146,7 @@ class DocumentWorkflow:
 
     def get_document(self, document_id: str) -> DocumentSummary:
         """Read one document using a short transaction."""
+        self.index_integrity_service.reconcile(recover_transient=False)
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")

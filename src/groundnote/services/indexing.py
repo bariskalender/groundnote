@@ -61,6 +61,15 @@ class DocumentIndexingService:
                     embedding_version=self.settings.embedding_version,
                     embedded_at=embedded_at,
                 )
+                integrity = unit_of_work.vectors.index_integrity(
+                    document_id,
+                    embedding_model=self.settings.embedding_model,
+                    embedding_dimension=self.settings.embedding_dimension,
+                    embedding_version=self.settings.embedding_version,
+                    embedding_dtype=self.settings.embedding_dtype,
+                )
+                if not integrity.is_complete:
+                    raise IndexingError("The local index did not pass its final integrity check.")
                 indexed_document = document.model_copy(
                     update={
                         "status": DocumentStatus.INDEXED,
@@ -151,14 +160,19 @@ class DocumentIndexingService:
 
     def _mark_failed(self, document_id: str, safe_message: str) -> None:
         with self.unit_of_work_factory() as unit_of_work:
-            if unit_of_work.documents is None:
-                raise RuntimeError("Unit of Work document repository is unavailable.")
+            if unit_of_work.documents is None or unit_of_work.vectors is None:
+                raise RuntimeError("Unit of Work repositories are unavailable.")
             document = unit_of_work.documents.get_by_id(document_id)
+            unit_of_work.vectors.clear_embeddings_for_document(document_id)
             unit_of_work.documents.update(
                 document.model_copy(
                     update={
                         "status": DocumentStatus.FAILED,
                         "updated_at": datetime.now(UTC),
+                        "indexed_at": None,
+                        "embedding_model": None,
+                        "embedding_dimension": None,
+                        "embedding_version": None,
                         "error_message": safe_message,
                     }
                 )

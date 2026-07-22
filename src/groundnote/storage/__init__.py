@@ -11,6 +11,7 @@ from groundnote.storage.exceptions import (
 )
 from groundnote.storage.migrations import MigrationRunner
 from groundnote.storage.repositories import (
+    DocumentIndexIntegrity,
     DocumentRepository,
     LexicalChunkMatch,
     SearchableChunkEmbedding,
@@ -23,6 +24,7 @@ from groundnote.storage.unit_of_work import SQLiteUnitOfWork, SQLiteUnitOfWorkFa
 
 __all__ = [
     "DocumentNotFoundError",
+    "DocumentIndexIntegrity",
     "DocumentRepository",
     "DuplicateDocumentError",
     "InvalidEmbeddingError",
