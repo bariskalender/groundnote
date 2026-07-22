@@ -789,8 +789,8 @@ were implemented and validated. Focused local commits were created and nothing w
 ## Phase 9.1A Deferred Work
 
 - Phase 9.1B: completed locally; lifecycle and performance details are recorded below.
-- Phase 9.1C: parser archive/decompression bounds and clean-machine/release hardening remain
-  unstarted.
+- Phase 9.1C: multi-file upload remains unstarted.
+- Phase 9.1D: security and release hardening remain unstarted.
 
 ## Phase 9.1B Model Lifecycle and Indexing Performance
 

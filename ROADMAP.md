@@ -21,6 +21,8 @@
 | 9 | Packaging and Release Preparation | Complete |
 | 9.1A | RAG Correctness, Index Recovery, and Managed File Safety | Complete |
 | 9.1B | Model Lifecycle and Indexing Performance | Complete |
+| 9.1C | Multi-file Upload | Not started |
+| 9.1D | Security and Release Hardening | Not started |
 
 ## Phase 9.1B Acceptance Notes
 
@@ -34,7 +36,8 @@
   embedding; verified one parse, one chunking pass, ordered batches, and transactional failures.
 - Retained synchronous sequential indexing and blocked chat during indexing based on measured CPU
   contention; background queues remain deferred.
-- Phase 9.1C parser/release hardening remains next and unstarted.
+- Phase 9.1C multi-file upload remains next and unstarted. Phase 9.1D security/release hardening is
+  also unstarted.
 
 ## Phase 9.1A Acceptance Notes
 
@@ -48,8 +51,8 @@
   cannot become usable or cited.
 - Remove and clear-all now delete only validated GroundNote-managed copies represented by database
   records; original selected files and unrelated managed-directory files remain untouched.
-- Phase 9.1B performance/resource work is complete; Phase 9.1C parser/release hardening remains
-  deferred.
+- Phase 9.1B performance/resource work is complete; Phase 9.1C multi-file upload and Phase 9.1D
+  security/release hardening remain deferred.
 
 ## Phase 9 Acceptance Notes
 
