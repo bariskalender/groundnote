@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 
 from groundnote.domain import DocumentStatus
+from groundnote.performance import IndexingDiagnostics
 
 Float32Vector = npt.NDArray[np.float32]
 Float32Matrix = npt.NDArray[np.float32]
@@ -51,6 +52,7 @@ class IndexingResult:
     status: DocumentStatus
     warnings: list[str]
     duration_ms: float
+    diagnostics: IndexingDiagnostics | None = None
 
 
 class BatchEmbeddingProvider(Protocol):

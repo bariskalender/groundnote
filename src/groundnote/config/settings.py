@@ -161,11 +161,18 @@ class Settings(BaseSettings):
             raise ValueError("similarity_threshold must be between -1.0 and 1.0.")
         return value
 
-    @field_validator("embedding_dimension", "embedding_batch_size")
+    @field_validator("embedding_dimension")
     @classmethod
-    def embedding_positive_values(cls, value: int) -> int:
+    def embedding_dimension_must_be_positive(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("embedding numeric settings must be positive.")
+            raise ValueError("embedding_dimension must be positive.")
+        return value
+
+    @field_validator("embedding_batch_size")
+    @classmethod
+    def embedding_batch_size_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 64:
+            raise ValueError("embedding_batch_size must be between 1 and 64.")
         return value
 
     @field_validator("retrieval_candidate_limit")

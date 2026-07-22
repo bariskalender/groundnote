@@ -69,7 +69,7 @@ class SemanticRetrievalService:
         try:
             self.embedding_service.load()
             query_vector = self.embedding_service.embed_query(query.text)
-        except Exception:
+        except BaseException:
             self._unload_embedding_model()
             raise
         finally:
@@ -185,6 +185,10 @@ class SemanticRetrievalService:
                 "embedding_model_unload_failed",
                 embedding_model=self.settings.embedding_model,
             )
+
+    def release_for_chat(self) -> None:
+        """Release GroundNote's query embedding provider before chat model activation."""
+        self._unload_embedding_model()
 
     def _expand_lexical_query(self, query: SemanticQuery) -> tuple[str, str, str | None]:
         tokens = _query_tokens(query.text)

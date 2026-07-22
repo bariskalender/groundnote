@@ -110,7 +110,10 @@ TEXT: dict[str, dict[str, str]] = {
         "empty_chat_no_documents": "Upload a document first, or select an indexed document.",
         "empty_chat_with_documents": "Try asking about a section, a concept, or a comparison in your indexed documents.",
         "operation_busy_question": (
-            "A document operation is running. Please wait until indexing finishes before asking a question."
+            "A local operation is running. Please wait for it to finish before asking a question."
+        ),
+        "chat_busy_indexing": (
+            "GroundNote is indexing a document. Chat will be available when indexing finishes."
         ),
         "operation_busy_indexing": (
             "A document operation is running. Please wait for it to finish before starting another operation."
@@ -125,6 +128,28 @@ TEXT: dict[str, dict[str, str]] = {
         "memory_saver_notice": (
             "Memory saver unloads models after each operation and increases latency."
         ),
+        "indexing_diagnostics": "Indexing diagnostics",
+        "indexing_diagnostics_summary": (
+            "Total: {duration} · Chunks: {chunks} · Embedding batches: {batches}"
+        ),
+        "indexing_model_usage": "Model load: {load_duration} · Reused: {reuse}",
+        "indexing_peak_memory": "Peak GroundNote process RSS estimate: {memory:.1f} MB",
+        "indexing_failed_at": "Failed during {stage}: {filename}",
+        "yes": "yes",
+        "no": "no",
+        "index_stage_saving_upload": "Saving upload locally",
+        "index_stage_validating": "Validating file",
+        "index_stage_hashing": "Checking file identity",
+        "index_stage_duplicate_check": "Checking for duplicates",
+        "index_stage_parsing": "Extracting document text",
+        "index_stage_chunking": "Creating searchable chunks",
+        "index_stage_saving_chunks": "Saving document chunks",
+        "index_stage_loading_embedding_model": "Loading embedding model",
+        "index_stage_embedding": "Embedding chunks",
+        "index_stage_saving_vectors": "Saving embeddings",
+        "index_stage_fts_indexing": "Saving search index",
+        "index_stage_integrity_verification": "Verifying index integrity",
+        "index_stage_finalization": "Finalizing document",
     },
     "tr": {
         "new_chat": "Yeni sohbet",
@@ -241,13 +266,38 @@ TR_EXTRA_TEXT: dict[str, str] = {
     "new_chat_busy": "Yeni sohbet başlatmadan önce mevcut işlemin bitmesini bekleyin.",
     "empty_chat_no_documents": "Önce belge yükleyin veya indekslenmiş belgelerden birini seçin.",
     "empty_chat_with_documents": "İndekslenmiş belgelerinizdeki bir bölüm, kavram veya karşılaştırma hakkında soru sorabilirsiniz.",
-    "operation_busy_question": "Belge işleniyor. Lütfen indeksleme tamamlandıktan sonra soru sorun.",
+    "operation_busy_question": "Yerel bir işlem sürüyor. Soru sormadan önce tamamlanmasını bekleyin.",
+    "chat_busy_indexing": (
+        "GroundNote bir belgeyi indeksliyor. İndeksleme tamamlandığında sohbet yeniden kullanılabilir."
+    ),
     "operation_busy_indexing": (
         "Bir belge işlemi çalışıyor. Lütfen yeni işlem başlatmadan önce bitmesini bekleyin."
     ),
     "operation_busy_upload": (
         "Başka bir belge işlemi devam ediyor. Yeni bir dosya yüklemeden önce işlemin tamamlanmasını bekleyin."
     ),
+    "indexing_diagnostics": "İndeksleme tanılamaları",
+    "indexing_diagnostics_summary": (
+        "Toplam: {duration} · Parça: {chunks} · Embedding batch sayısı: {batches}"
+    ),
+    "indexing_model_usage": "Model yükleme: {load_duration} · Yeniden kullanıldı: {reuse}",
+    "indexing_peak_memory": "Tahmini en yüksek GroundNote süreç RSS değeri: {memory:.1f} MB",
+    "indexing_failed_at": "{stage} aşamasında başarısız oldu: {filename}",
+    "yes": "evet",
+    "no": "hayır",
+    "index_stage_saving_upload": "Yüklemeyi yerel olarak kaydediyor",
+    "index_stage_validating": "Dosyayı doğruluyor",
+    "index_stage_hashing": "Dosya kimliğini kontrol ediyor",
+    "index_stage_duplicate_check": "Tekrar eden dosyayı kontrol ediyor",
+    "index_stage_parsing": "Belge metnini çıkarıyor",
+    "index_stage_chunking": "Aranabilir parçaları oluşturuyor",
+    "index_stage_saving_chunks": "Belge parçalarını kaydediyor",
+    "index_stage_loading_embedding_model": "Embedding modelini yüklüyor",
+    "index_stage_embedding": "Parçalar için embedding oluşturuyor",
+    "index_stage_saving_vectors": "Embedding verilerini kaydediyor",
+    "index_stage_fts_indexing": "Arama indeksini kaydediyor",
+    "index_stage_integrity_verification": "İndeks bütünlüğünü doğruluyor",
+    "index_stage_finalization": "Belgeyi tamamlıyor",
 }
 
 

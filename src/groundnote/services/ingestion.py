@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from contextlib import nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
@@ -18,6 +19,7 @@ from groundnote.chunking.service import text_chunk_to_document_chunk
 from groundnote.config import Settings
 from groundnote.documents import DocumentProcessingService, DuplicateCheckResult, DuplicateType
 from groundnote.domain import Document, DocumentStatus
+from groundnote.performance import IndexingMetricsCollector, IndexingStage
 from groundnote.storage import SQLiteUnitOfWork
 from groundnote.utils import get_logger, safe_log_info, sanitize_log_fields
 
@@ -49,6 +51,8 @@ class PreEmbeddingIngestionService:
         *,
         original_filename: str,
         allowed_directory: Path,
+        precomputed_sha256: str | None = None,
+        metrics: IndexingMetricsCollector | None = None,
     ) -> IngestionPlan:
         """Persist document metadata and pre-embedding chunks in one transaction."""
         started = time.perf_counter()
@@ -66,8 +70,13 @@ class PreEmbeddingIngestionService:
                 original_filename=original_filename,
                 allowed_directory=allowed_directory,
                 stored_filename=file_path.name,
+                precomputed_sha256=precomputed_sha256,
+                metrics=metrics,
             )
-            chunking_result = self.chunker.chunk(parsed, chunking_settings)
+            with metrics.measure(IndexingStage.CHUNKING) if metrics else nullcontext():
+                chunking_result = self.chunker.chunk(parsed, chunking_settings)
+            if metrics is not None:
+                metrics.chunk_count = len(chunking_result.chunks)
             document_id = str(uuid.uuid4())
             now = datetime.now(UTC)
             document = Document(
@@ -87,13 +96,14 @@ class PreEmbeddingIngestionService:
                 embedding_dimension=None,
                 chunking_version=chunking_settings.version,
             )
-            unit_of_work.documents.add(document)
-            persisted_chunks = [
-                text_chunk_to_document_chunk(chunk, document_id=document_id)
-                for chunk in chunking_result.chunks
-            ]
-            unit_of_work.vectors.add_chunks([(chunk, None) for chunk in persisted_chunks])
-            unit_of_work.commit()
+            with metrics.measure(IndexingStage.SAVING_CHUNKS) if metrics else nullcontext():
+                unit_of_work.documents.add(document)
+                persisted_chunks = [
+                    text_chunk_to_document_chunk(chunk, document_id=document_id)
+                    for chunk in chunking_result.chunks
+                ]
+                unit_of_work.vectors.add_chunks([(chunk, None) for chunk in persisted_chunks])
+                unit_of_work.commit()
 
         chunks = [
             chunk.model_copy(update={"document_id": document_id})

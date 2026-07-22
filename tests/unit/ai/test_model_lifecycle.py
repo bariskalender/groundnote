@@ -39,6 +39,16 @@ class TrackingChatProvider(FakeChatProvider):
         return super().generate_request(request)
 
 
+class SyntheticInterruption(BaseException):
+    pass
+
+
+class InterruptedChatProvider(TrackingChatProvider):
+    def generate_request(self, request: ChatGenerationRequest) -> ChatGenerationResult:
+        del request
+        raise SyntheticInterruption()
+
+
 def _request(model: str) -> ChatGenerationRequest:
     return ChatGenerationRequest(
         system_prompt="system",
@@ -119,5 +129,18 @@ def test_shutdown_is_idempotent_and_releases_registered_providers() -> None:
 
     assert lifecycle.shutdown() == []
     assert lifecycle.shutdown() == []
+    assert raw.loaded is False
+    assert lifecycle.active_model_alias is None
+
+
+def test_process_level_interruption_releases_active_chat_model() -> None:
+    lifecycle = ChatModelLifecycle()
+    raw = InterruptedChatProvider("balanced")
+    managed = lifecycle.register(raw)
+    managed.load()
+
+    with pytest.raises(SyntheticInterruption):
+        managed.generate_request(_request("balanced"))
+
     assert raw.loaded is False
     assert lifecycle.active_model_alias is None

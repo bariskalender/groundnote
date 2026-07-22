@@ -43,6 +43,11 @@ class EmbeddingService:
             self._loaded = False
             raise EmbeddingModelLoadError("Embedding model could not be loaded.") from exc
 
+    @property
+    def is_loaded(self) -> bool:
+        """Return GroundNote's tracked provider state without querying the SDK."""
+        return self._loaded
+
     def unload(self) -> None:
         """Release embedding provider resources where supported."""
         try:

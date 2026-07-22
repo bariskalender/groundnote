@@ -40,6 +40,8 @@ def test_settings_environment_overrides(monkeypatch: pytest.MonkeyPatch, tmp_pat
         ("chunk_overlap_characters", -1),
         ("maximum_output_tokens", 4096),
         ("temperature", 2.5),
+        ("embedding_batch_size", 0),
+        ("embedding_batch_size", 65),
     ],
 )
 def test_settings_reject_invalid_simple_values(field: str, value: object) -> None:

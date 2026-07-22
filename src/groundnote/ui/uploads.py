@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any
 
@@ -48,7 +48,8 @@ class SelectedUpload:
 
     identity: str
     filename: str
-    source: object
+    content_sha256: str
+    data: bytes = field(repr=False)
 
 
 @dataclass(frozen=True)
@@ -80,9 +81,14 @@ def register_selected_uploads(
     for uploaded in uploaded_files:
         filename = safe_filename(str(getattr(uploaded, "name", "document")))
         data = read_uploaded_bytes(uploaded)
-        identity = upload_identity(filename, data)
-        del data
-        selection = SelectedUpload(identity=identity, filename=filename, source=uploaded)
+        content_sha256 = hashlib.sha256(data).hexdigest()
+        identity = _upload_identity_from_hash(filename, len(data), content_sha256)
+        selection = SelectedUpload(
+            identity=identity,
+            filename=filename,
+            content_sha256=content_sha256,
+            data=data,
+        )
         selected[identity] = selection
         if identity in completed or identity in failed or identity == active:
             continue
@@ -220,7 +226,11 @@ def read_uploaded_bytes(uploaded: object) -> bytes:
 def upload_identity(filename: str, data: bytes) -> str:
     """Build a stable opaque identity from safe name, size, and content hash."""
     content_hash = hashlib.sha256(data).hexdigest()
-    material = f"{safe_filename(filename)}\0{len(data)}\0{content_hash}".encode()
+    return _upload_identity_from_hash(filename, len(data), content_hash)
+
+
+def _upload_identity_from_hash(filename: str, size: int, content_hash: str) -> str:
+    material = f"{safe_filename(filename)}\0{size}\0{content_hash}".encode()
     return hashlib.sha256(material).hexdigest()
 
 

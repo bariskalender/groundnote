@@ -64,6 +64,21 @@ class FailOnSecondEmbeddingProvider(FakeEmbeddingProvider):
         return super().embed_many(texts, batch_size=batch_size)
 
 
+class SyntheticIndexingInterruption(BaseException):
+    pass
+
+
+class InterruptedEmbeddingProvider(FakeEmbeddingProvider):
+    def embed_many(
+        self,
+        texts: Sequence[str],
+        *,
+        batch_size: int = 8,
+    ) -> EmbeddingBatchResult:
+        del texts, batch_size
+        raise SyntheticIndexingInterruption()
+
+
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
         data_directory=tmp_path / "app",
@@ -211,6 +226,29 @@ def test_embedding_model_load_failure_marks_document_failed_and_retryable(tmp_pa
     document = context.document_workflow.list_documents()[0]
     assert document.status is DocumentStatus.FAILED
     assert document.embedded_chunk_count == 0
+
+
+def test_process_level_indexing_interruption_cleans_model_and_marks_retryable(
+    tmp_path: Path,
+) -> None:
+    embedding = InterruptedEmbeddingProvider(dimension=4)
+    context = build_application_context(
+        _settings(tmp_path).model_copy(update={"keep_models_loaded": True}),
+        embedding_provider=embedding,
+        chat_provider=FakeChatProvider(),
+    )
+
+    with pytest.raises(SyntheticIndexingInterruption):
+        context.document_workflow.process_and_index(
+            original_filename="interrupted.txt",
+            data=b"A process-level interruption must leave a retryable document.",
+        )
+
+    documents = context.document_workflow.list_documents()
+    assert len(documents) == 1
+    assert documents[0].status is DocumentStatus.FAILED
+    assert documents[0].embedded_chunk_count == 0
+    assert embedding.loaded is False
 
 
 def test_question_orchestration_forwards_filters_and_returns_one_latest_answer(

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import time
+from contextlib import nullcontext
 from pathlib import Path
+from re import fullmatch
 from typing import Protocol
 
 from groundnote.config import Settings
@@ -24,6 +26,7 @@ from groundnote.documents.validation import (
     validate_local_file,
 )
 from groundnote.domain import Document
+from groundnote.performance import IndexingMetricsCollector, IndexingStage
 from groundnote.storage import DocumentRepository
 from groundnote.utils import get_logger, safe_log_info, sanitize_log_fields
 
@@ -80,19 +83,32 @@ class DocumentProcessingService:
         original_filename: str,
         allowed_directory: Path,
         stored_filename: str | None = None,
+        precomputed_sha256: str | None = None,
+        metrics: IndexingMetricsCollector | None = None,
     ) -> ParsedDocument:
         started = time.perf_counter()
         safe_name = safe_display_filename(original_filename)
-        validation = validate_local_file(
-            file_path,
-            original_filename=safe_name,
-            allowed_directory=allowed_directory,
-            settings=self.settings,
-        )
+        with metrics.measure(IndexingStage.VALIDATING) if metrics else nullcontext():
+            validation = validate_local_file(
+                file_path,
+                original_filename=safe_name,
+                allowed_directory=allowed_directory,
+                settings=self.settings,
+            )
         if not validation.is_valid or validation.detected_file_type is None:
             raise _validation_error(validation.error_code, validation.user_message)
-        sha256 = calculate_sha256(file_path)
-        duplicate = self.check_duplicate(sha256)
+        if metrics is not None:
+            metrics.file_size_bytes = validation.size_bytes
+        if precomputed_sha256 is None:
+            with metrics.measure(IndexingStage.HASHING) if metrics else nullcontext():
+                sha256 = calculate_sha256(file_path)
+        else:
+            sha256 = _validated_sha256(precomputed_sha256)
+            if metrics is not None:
+                metrics.hash_reused = True
+                metrics.record_zero(IndexingStage.HASHING)
+        with metrics.measure(IndexingStage.DUPLICATE_CHECK) if metrics else nullcontext():
+            duplicate = self.check_duplicate(sha256)
         if duplicate.is_duplicate:
             self._log_result(
                 "document_duplicate_detected",
@@ -113,13 +129,14 @@ class DocumentProcessingService:
         )
         parser = self.registry.get(validation.detected_file_type)
         try:
-            parsed = parser.parse(
-                file_path,
-                original_filename=safe_name,
-                stored_filename=resolved_stored_filename,
-                sha256=sha256,
-                file_size_bytes=validation.size_bytes,
-            )
+            with metrics.measure(IndexingStage.PARSING) if metrics else nullcontext():
+                parsed = parser.parse(
+                    file_path,
+                    original_filename=safe_name,
+                    stored_filename=resolved_stored_filename,
+                    sha256=sha256,
+                    file_size_bytes=validation.size_bytes,
+                )
         except DocumentError as exc:
             self._log_result(
                 "document_parse_failed",
@@ -131,6 +148,11 @@ class DocumentProcessingService:
                 duration_ms=_elapsed_ms(started),
             )
             raise
+        if metrics is not None:
+            metrics.extracted_character_count = sum(
+                len(section.text) for section in parsed.sections
+            )
+            metrics.page_count = parsed.page_count
         self._log_result(
             "document_parsed",
             safe_name=safe_name,
@@ -177,3 +199,10 @@ def _validate_stored_filename(filename: str) -> str:
     if safe_name != filename:
         raise UnsafeFileError("The stored filename is not safe.")
     return safe_name
+
+
+def _validated_sha256(value: str) -> str:
+    normalized = value.strip().casefold()
+    if fullmatch(r"[0-9a-f]{64}", normalized) is None:
+        raise UnsafeFileError("The precomputed document hash is invalid.")
+    return normalized

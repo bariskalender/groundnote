@@ -92,21 +92,21 @@ class ManagedChatProvider:
     def generate(self, messages: Sequence[ChatMessage], *, max_tokens: int = 64) -> ChatResult:
         try:
             return self._provider.generate(messages, max_tokens=max_tokens)
-        except Exception:
+        except BaseException:
             self._release_after_failure()
             raise
 
     def generate_request(self, request: ChatGenerationRequest) -> ChatGenerationResult:
         try:
             return self._provider.generate_request(request)
-        except Exception:
+        except BaseException:
             self._release_after_failure()
             raise
 
     def stream(self, messages: Sequence[ChatMessage], *, max_tokens: int = 64) -> Iterable[str]:
         try:
             yield from self._provider.stream(messages, max_tokens=max_tokens)
-        except Exception:
+        except BaseException:
             self._release_after_failure()
             raise
 

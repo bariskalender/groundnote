@@ -248,6 +248,7 @@ def test_fts_write_failure_leaves_document_retryable_and_cleans_partial_data(
     with pytest.raises(StorageError):
         context.indexing_service.index_document(document_id)
 
+    assert context.embedding_service.is_loaded is False
     failed = context.document_workflow.get_document(document_id)
     assert failed.status is DocumentStatus.FAILED
     assert failed.embedded_chunk_count == 0
@@ -260,6 +261,37 @@ def test_fts_write_failure_leaves_document_retryable_and_cleans_partial_data(
             ).fetchone()[0]
             == 0
         )
+
+
+def test_vector_write_failure_unloads_provider_and_cleans_partial_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = _settings(tmp_path)
+    context = _context(settings)
+    assert settings.document_directory is not None
+    source = settings.document_directory / "vector-failure.txt"
+    source.write_text("Vector persistence failure fixture.", encoding="utf-8")
+    plan = context.ingestion_service.ingest_file(
+        source,
+        original_filename=source.name,
+        allowed_directory=settings.document_directory,
+    )
+    document_id = plan.chunks[0].document_id
+    assert document_id is not None
+
+    def fail_vector_save(self: SQLiteVectorRepository, *args: object, **kwargs: object) -> None:
+        raise sqlite3.OperationalError("synthetic vector write failure")
+
+    monkeypatch.setattr(SQLiteVectorRepository, "save_chunk_embeddings", fail_vector_save)
+
+    with pytest.raises(sqlite3.OperationalError):
+        context.indexing_service.index_document(document_id)
+
+    assert context.embedding_service.is_loaded is False
+    failed = context.document_workflow.get_document(document_id)
+    assert failed.status is DocumentStatus.FAILED
+    assert failed.embedded_chunk_count == 0
 
 
 def test_final_integrity_check_rejects_silently_missing_fts_rows(
@@ -287,6 +319,7 @@ def test_final_integrity_check_rejects_silently_missing_fts_rows(
     with pytest.raises(IndexingError):
         context.indexing_service.index_document(document_id)
 
+    assert context.embedding_service.is_loaded is False
     failed = context.document_workflow.get_document(document_id)
     assert failed.status is DocumentStatus.FAILED
     assert failed.embedded_chunk_count == 0

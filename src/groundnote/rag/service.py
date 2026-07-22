@@ -136,6 +136,7 @@ class RagService:
             )
             self._log_completion(query, answer)
             return answer
+        self._release_retrieval_resources_before_chat()
         answer_text, citation_ids, retries, status = self._generate_with_citations(
             query=query,
             context_items=context_items,
@@ -171,6 +172,11 @@ class RagService:
         )
         self._log_completion(query, answer)
         return answer
+
+    def _release_retrieval_resources_before_chat(self) -> None:
+        release = getattr(self.retrieval_service, "release_for_chat", None)
+        if callable(release):
+            release()
 
     def _generate_with_citations(
         self,

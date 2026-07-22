@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from groundnote.domain import DocumentStatus, SupportedFileType
+from groundnote.performance import IndexingDiagnostics
 from groundnote.rag import Citation, RagAnswer
 
 
@@ -44,6 +45,7 @@ class DocumentSummary:
     embedding_model: str | None
     error_message: str | None = None
     managed_copy_cleanup_warning: bool = False
+    indexing_diagnostics: IndexingDiagnostics | None = None
 
 
 @dataclass(frozen=True)
@@ -55,6 +57,7 @@ class UploadOutcome:
     section_count: int | None
     warnings: list[str] = field(default_factory=list)
     duration_ms: float = 0.0
+    diagnostics: IndexingDiagnostics | None = None
 
 
 @dataclass(frozen=True)

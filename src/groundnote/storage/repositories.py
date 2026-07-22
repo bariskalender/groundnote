@@ -123,7 +123,9 @@ class VectorRepository(Protocol):
         embedding_model: str,
         embedding_version: str,
         embedded_at: datetime,
+        sync_fts: bool = True,
     ) -> None: ...
+    def sync_fts_for_document(self, document_id: str) -> None: ...
     def list_searchable_embeddings(
         self,
         *,
@@ -344,6 +346,7 @@ class SQLiteVectorRepository:
         embedding_model: str,
         embedding_version: str,
         embedded_at: datetime,
+        sync_fts: bool = True,
     ) -> None:
         if not embeddings:
             return
@@ -372,11 +375,29 @@ class SQLiteVectorRepository:
                     for chunk_id, embedding in embeddings
                 ],
             )
-            self._sync_fts_rows_for_chunk_ids([chunk_id for chunk_id, _ in embeddings])
         except sqlite3.Error as exc:
             raise StorageError("Could not save chunk embeddings.") from exc
         if cursor.rowcount != len(embeddings):
             raise StorageError("Could not save every chunk embedding.")
+        if sync_fts:
+            self._sync_fts_rows_for_chunk_ids([chunk_id for chunk_id, _ in embeddings])
+
+    def sync_fts_for_document(self, document_id: str) -> None:
+        """Replace FTS rows for embedded chunks belonging to one document."""
+        try:
+            rows = self._connection.execute(
+                """
+                SELECT id
+                FROM document_chunks
+                WHERE document_id = ? AND embedding IS NOT NULL
+                ORDER BY chunk_index, id
+                """,
+                (document_id,),
+            ).fetchall()
+            self.delete_fts_for_document(document_id)
+            self._sync_fts_rows_for_chunk_ids([str(row["id"]) for row in rows])
+        except sqlite3.Error as exc:
+            raise StorageError("Could not synchronize the document search index.") from exc
 
     def list_searchable_embeddings(
         self,

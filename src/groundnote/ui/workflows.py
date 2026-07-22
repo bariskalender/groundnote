@@ -17,6 +17,7 @@ from groundnote.documents import (
 )
 from groundnote.documents.uploads import write_uploaded_bytes
 from groundnote.domain import Document, DocumentStatus, SupportedFileType
+from groundnote.performance import IndexingMetricsCollector, IndexingProgress, IndexingStage
 from groundnote.rag import (
     QueryIntent,
     RagAnswer,
@@ -42,6 +43,7 @@ from groundnote.ui.models import (
 from groundnote.utils import get_logger, safe_log_warning
 
 StageCallback = Callable[[UploadStage], None]
+ProgressCallback = Callable[[IndexingProgress], None]
 PROCESSING_DOCUMENT_STATUSES = {
     DocumentStatus.PENDING,
     DocumentStatus.PENDING_EMBEDDING,
@@ -74,6 +76,8 @@ class DocumentWorkflow:
         original_filename: str,
         data: bytes,
         on_stage: StageCallback | None = None,
+        on_progress: ProgressCallback | None = None,
+        precomputed_sha256: str | None = None,
     ) -> UploadOutcome:
         """Process one confirmed upload synchronously through existing services."""
         if not original_filename:
@@ -81,12 +85,17 @@ class DocumentWorkflow:
         if self.settings.document_directory is None:
             raise RuntimeError("Document directory is not configured.")
         started = time.perf_counter()
-        self._notify(on_stage, UploadStage.SAVING)
-        stored_path = write_uploaded_bytes(
-            data,
-            original_filename=original_filename,
-            target_directory=self.settings.document_directory,
+        metrics = IndexingMetricsCollector(
+            embedding_batch_size=self.settings.embedding_batch_size,
+            on_progress=on_progress,
         )
+        self._notify(on_stage, UploadStage.SAVING)
+        with metrics.measure(IndexingStage.SAVING_UPLOAD):
+            stored_path = write_uploaded_bytes(
+                data,
+                original_filename=original_filename,
+                target_directory=self.settings.document_directory,
+            )
         ingestion_completed = False
         try:
             self._notify(on_stage, UploadStage.PROCESSING)
@@ -94,6 +103,8 @@ class DocumentWorkflow:
                 stored_path,
                 original_filename=original_filename,
                 allowed_directory=self.settings.document_directory,
+                precomputed_sha256=precomputed_sha256,
+                metrics=metrics,
             )
             ingestion_completed = True
         except DuplicateDocumentError as exc:
@@ -105,6 +116,7 @@ class DocumentWorkflow:
                 section_count=None,
                 warnings=[],
                 duration_ms=_elapsed_ms(started),
+                diagnostics=metrics.snapshot(),
             )
         except Exception:
             _remove_file(stored_path)
@@ -115,7 +127,7 @@ class DocumentWorkflow:
             raise RuntimeError("Document ingestion did not reach the indexing boundary.")
         try:
             self._notify(on_stage, UploadStage.INDEXING)
-            indexing = self.indexing_service.index_document(document_id)
+            indexing = self.indexing_service.index_document(document_id, metrics=metrics)
             self._notify(on_stage, UploadStage.FINALIZING)
             if indexing.status != DocumentStatus.INDEXED:
                 raise RuntimeError("Document indexing did not complete.")
@@ -127,6 +139,7 @@ class DocumentWorkflow:
                 section_count=len(plan.parsed_document.sections),
                 warnings=[*plan.warnings, *indexing.warnings],
                 duration_ms=_elapsed_ms(started),
+                diagnostics=metrics.snapshot(),
             )
         except Exception:
             if not ingestion_completed:
@@ -218,10 +231,23 @@ class DocumentWorkflow:
             for document, summary in zip(documents, summaries, strict=True)
         ]
 
-    def reindex_document(self, document_id: str) -> DocumentSummary:
+    def reindex_document(
+        self,
+        document_id: str,
+        *,
+        on_progress: ProgressCallback | None = None,
+    ) -> DocumentSummary:
         """Regenerate embeddings for the existing locally persisted chunks once."""
-        self.indexing_service.index_document(document_id, force_reindex=True)
-        return self.get_document(document_id)
+        metrics = IndexingMetricsCollector(
+            embedding_batch_size=self.settings.embedding_batch_size,
+            on_progress=on_progress,
+        )
+        result = self.indexing_service.index_document(
+            document_id,
+            force_reindex=True,
+            metrics=metrics,
+        )
+        return replace(self.get_document(document_id), indexing_diagnostics=result.diagnostics)
 
     def _existing_duplicate(self, error: DuplicateDocumentError) -> DocumentSummary:
         if error.existing_document_id is None:

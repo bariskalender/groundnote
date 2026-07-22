@@ -32,6 +32,17 @@ class QueryFailEmbeddingProvider(FakeEmbeddingProvider):
         raise RuntimeError("synthetic query embedding failure")
 
 
+class OverlapDetectingChatProvider(FakeChatProvider):
+    def __init__(self, embedding: FakeEmbeddingProvider) -> None:
+        super().__init__(responses=["The evidence remains local. [S1]"])
+        self.embedding = embedding
+        self.embedding_loaded_during_generation: bool | None = None
+
+    def generate_request(self, request):
+        self.embedding_loaded_during_generation = self.embedding.loaded
+        return super().generate_request(request)
+
+
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
         data_directory=tmp_path / "app",
@@ -222,6 +233,25 @@ def test_query_embedding_failure_releases_warm_provider(tmp_path: Path) -> None:
         context.retrieval_service.search("What is the evidence?")
 
     assert embedding.loaded is False
+
+
+def test_grounded_answer_releases_embedding_model_before_chat_generation(tmp_path: Path) -> None:
+    embedding = FakeEmbeddingProvider(dimension=4)
+    chat = OverlapDetectingChatProvider(embedding)
+    context = build_application_context(
+        _settings(tmp_path).model_copy(update={"keep_models_loaded": True}),
+        embedding_provider=embedding,
+        chat_provider=chat,
+    )
+    context.document_workflow.process_and_index(
+        original_filename="no-overlap.txt",
+        data=b"The evidence remains local for the grounded answer.",
+    )
+
+    answer = context.question_workflow.answer("Where does the evidence remain?")
+
+    assert answer.answer.grounded is True
+    assert chat.embedding_loaded_during_generation is False
 
 
 def test_corrupt_upload_does_not_stop_later_valid_file(tmp_path: Path) -> None:

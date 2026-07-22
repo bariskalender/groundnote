@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import atexit
 import json
 import tempfile
+from functools import partial
 from pathlib import Path
 
 from groundnote.config import Settings
-from groundnote.ui import build_application_context
+from groundnote.ui import build_application_context, unload_local_models
 
 
 def main() -> int:
@@ -19,6 +21,8 @@ def main() -> int:
             rag_max_output_tokens=240,
         )
         context = build_application_context(settings)
+        cleanup = partial(unload_local_models, context)
+        atexit.register(cleanup)
         upload = context.document_workflow.process_and_index(
             original_filename="phase7-local-smoke.md",
             data=(
@@ -52,6 +56,9 @@ def main() -> int:
                 insufficient.answer.citations == [],
             )
         )
+        cleanup_warnings = cleanup()
+        atexit.unregister(cleanup)
+        passed = passed and not cleanup_warnings
         print(
             json.dumps(
                 {
@@ -65,6 +72,7 @@ def main() -> int:
                     "insufficient_evidence": insufficient.answer.insufficient_evidence,
                     "embedding_model": settings.embedding_model,
                     "chat_model": settings.chat_model,
+                    "cleanup_warning_count": len(cleanup_warnings),
                 },
                 indent=2,
                 sort_keys=True,

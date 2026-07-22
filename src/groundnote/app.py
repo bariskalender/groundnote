@@ -11,6 +11,7 @@ import streamlit as st
 
 from groundnote import __version__
 from groundnote.domain import DocumentStatus, SupportedFileType
+from groundnote.performance import IndexingDiagnostics, IndexingProgress, IndexingStage
 from groundnote.ui import ApplicationContext, build_application_context, unload_local_models
 from groundnote.ui.components.notices import render_message
 from groundnote.ui.components.upload import render_upload_control
@@ -30,6 +31,7 @@ from groundnote.ui.state import (
     CHAT_MESSAGES,
     CURRENT_FILTERS,
     LAST_MODEL_ACTIVITY_AT,
+    LAST_UPLOAD_RESULT,
     PENDING_CLEAR_DOCUMENTS,
     PENDING_DELETE_DOCUMENT_ID,
     PERFORMANCE_MODE,
@@ -37,6 +39,7 @@ from groundnote.ui.state import (
     UI_LANGUAGE,
     FlashNotice,
     FlashSeverity,
+    OperationState,
     begin_operation,
     can_start_new_chat,
     can_start_operation,
@@ -57,7 +60,6 @@ from groundnote.ui.uploads import (
     complete_upload,
     fail_upload,
     queue_retry,
-    read_uploaded_bytes,
     register_selected_uploads,
     start_upload,
     update_upload_status,
@@ -205,6 +207,7 @@ def _render_sidebar(
             _clear_notice(processing_notice)
 
         _render_document_list(context, language, selected)
+        _render_latest_indexing_diagnostics(language)
         _render_sources_sidebar(context, language)
         _render_foundry_status(context, language)
         st.caption(t("local_notice", language))
@@ -237,14 +240,23 @@ def _process_selected_upload(
             update_upload_status(st.session_state, selection.identity, upload_status)
             status.write(_upload_status_label(upload_status, language))
 
+        last_progress: list[IndexingProgress | None] = [None]
+
+        def show_progress(progress: IndexingProgress) -> None:
+            last_progress[0] = progress
+            status.write(_indexing_progress_label(progress, language))
+
         data: bytes | None = None
         try:
-            data = read_uploaded_bytes(selection.source)
+            data = selection.data
             outcome = context.document_workflow.process_and_index(
                 original_filename=selection.filename,
                 data=data,
                 on_stage=show_stage,
+                on_progress=show_progress,
+                precomputed_sha256=selection.content_sha256,
             )
+            st.session_state[LAST_UPLOAD_RESULT] = outcome
             terminal_status = (
                 UploadStatus.DUPLICATE
                 if outcome.kind is UploadOutcomeKind.DUPLICATE
@@ -257,7 +269,10 @@ def _process_selected_upload(
                 document_id=outcome.document.document_id,
             )
             status.update(
-                label=f"{_upload_status_label(terminal_status, language)}: {selection.filename}",
+                label=(
+                    f"{_upload_status_label(terminal_status, language)}: "
+                    f"{selection.filename} · {format_duration(outcome.duration_ms)}"
+                ),
                 state="complete",
                 expanded=False,
             )
@@ -277,8 +292,9 @@ def _process_selected_upload(
                 message=message,
                 document_id=_new_failed_document_id(context, before_ids),
             )
+            failed_stage = last_progress[0].stage if last_progress[0] is not None else None
             status.update(
-                label=f"{t('failed', language)}: {selection.filename}",
+                label=_indexing_failure_label(selection.filename, failed_stage, language),
                 state="error",
                 expanded=False,
             )
@@ -510,9 +526,10 @@ def _render_chat_history(context: ApplicationContext, language: str) -> None:
 
 
 def _render_chat_input(context: ApplicationContext, language: str) -> None:
-    active = operation_is_active(st.session_state.get(ACTIVE_OPERATION))
+    current_operation = st.session_state.get(ACTIVE_OPERATION)
+    active = operation_is_active(current_operation)
     if active:
-        st.caption(t("operation_busy_question", language))
+        st.caption(_chat_busy_message(current_operation, language))
     prompt = st.chat_input(
         t("ask_placeholder", language),
         max_chars=context.settings.rag_max_query_characters,
@@ -520,14 +537,14 @@ def _render_chat_input(context: ApplicationContext, language: str) -> None:
     )
     if prompt:
         if not can_start_operation(st.session_state):
-            st.info(t("operation_busy_question", language))
+            st.info(_chat_busy_message(st.session_state.get(ACTIVE_OPERATION), language))
             return
         _answer_prompt(context, prompt, language)
 
 
 def _answer_prompt(context: ApplicationContext, prompt: str, language: str) -> None:
     if not can_start_operation(st.session_state):
-        st.info(t("operation_busy_question", language))
+        st.info(_chat_busy_message(st.session_state.get(ACTIVE_OPERATION), language))
         return
     operation = begin_operation(st.session_state, "question")
     succeeded = False
@@ -871,8 +888,26 @@ def _reindex_document(
             ),
             expanded=False,
         ) as status:
-            refreshed = context.document_workflow.reindex_document(document.document_id)
-            status.update(label=t("ready", language), state="complete", expanded=False)
+            refreshed = context.document_workflow.reindex_document(
+                document.document_id,
+                on_progress=lambda progress: status.write(
+                    _indexing_progress_label(progress, language)
+                ),
+            )
+            duration_ms = (
+                refreshed.indexing_diagnostics.total_duration_ms
+                if refreshed.indexing_diagnostics is not None
+                else None
+            )
+            status.update(
+                label=(
+                    f"{t('ready', language)} · {format_duration(duration_ms)}"
+                    if duration_ms is not None
+                    else t("ready", language)
+                ),
+                state="complete",
+                expanded=False,
+            )
         set_flash_notice(
             st.session_state,
             FlashNotice(
@@ -1021,6 +1056,69 @@ def _clear_document_references_from_session(document_ids: set[str]) -> None:
         for message in _messages()
         if all(citation.document_id not in document_ids for citation in message.citations)
     ]
+
+
+def _render_latest_indexing_diagnostics(language: str) -> None:
+    if not st.session_state.get(SHOW_DEBUG_DETAILS):
+        return
+    outcome = st.session_state.get(LAST_UPLOAD_RESULT)
+    diagnostics = getattr(outcome, "diagnostics", None)
+    if not isinstance(diagnostics, IndexingDiagnostics):
+        return
+    with st.expander(t("indexing_diagnostics", language), expanded=False):
+        st.caption(
+            t("indexing_diagnostics_summary", language).format(
+                duration=format_duration(diagnostics.total_duration_ms),
+                chunks=diagnostics.chunk_count,
+                batches=diagnostics.embedding_batch_count,
+            )
+        )
+        st.caption(
+            t("indexing_model_usage", language).format(
+                load_duration=format_duration(diagnostics.model_load_duration_ms),
+                reuse=t("yes", language) if diagnostics.model_reused else t("no", language),
+            )
+        )
+        if diagnostics.peak_process_rss_mb is not None:
+            st.caption(
+                t("indexing_peak_memory", language).format(memory=diagnostics.peak_process_rss_mb)
+            )
+        for stage, duration_ms in diagnostics.stage_durations_ms.items():
+            st.caption(
+                f"{_indexing_stage_label(IndexingStage(stage), language)}: "
+                f"{format_duration(duration_ms)}"
+            )
+
+
+def _indexing_progress_label(progress: IndexingProgress, language: str) -> str:
+    label = _indexing_stage_label(progress.stage, language)
+    if progress.completed_units is not None and progress.total_units is not None:
+        label = f"{label}: {progress.completed_units} / {progress.total_units}"
+    return f"{label} · {format_duration(progress.elapsed_ms)}"
+
+
+def _indexing_stage_label(stage: IndexingStage, language: str) -> str:
+    return t(f"index_stage_{stage.value}", language)
+
+
+def _indexing_failure_label(
+    filename: str,
+    stage: IndexingStage | None,
+    language: str,
+) -> str:
+    safe_name = safe_filename(filename)
+    if stage is None:
+        return f"{t('failed', language)}: {safe_name}"
+    return t("indexing_failed_at", language).format(
+        filename=safe_name,
+        stage=_indexing_stage_label(stage, language),
+    )
+
+
+def _chat_busy_message(operation: object, language: str) -> str:
+    if isinstance(operation, OperationState) and operation.operation_type in {"upload", "reindex"}:
+        return t("chat_busy_indexing", language)
+    return t("operation_busy_question", language)
 
 
 def _unload_chat_models(context: ApplicationContext) -> None:
