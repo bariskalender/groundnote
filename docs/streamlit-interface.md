@@ -19,6 +19,16 @@ uv sync
 uv run streamlit run src/groundnote/app.py
 ```
 
+For normal Windows use, Phase 9 adds the preferred launcher:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_groundnote.ps1
+```
+
+It performs environment checks, prevents duplicate launcher sessions, binds to loopback only, and
+records scoped PID/token metadata for `scripts/stop_groundnote.ps1`. Direct Streamlit startup
+remains supported for development but cannot provide the launcher's scoped external stop metadata.
+
 The application starts without loading an embedding or chat model. The sidebar performs only a
 lightweight `foundry server status` check and never starts the service or downloads a model.
 
