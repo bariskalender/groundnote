@@ -2,9 +2,9 @@
 
 ## Current Phase
 
-Phase 9.1A complete locally. Grounding correctness, interrupted-index recovery, Ready integrity,
-and managed-copy safety were implemented and validated. Focused local commits were created and
-nothing was pushed.
+Phase 9.1B complete locally. GroundNote-owned chat model lifecycle, embedding cleanup, indexing
+stage diagnostics, duplicate-work removal, bounded batching, and isolated performance measurement
+were implemented and validated. Focused local commits were created and nothing was pushed.
 
 ## Completed Tasks
 
@@ -788,11 +788,47 @@ nothing was pushed.
 
 ## Phase 9.1A Deferred Work
 
-- Phase 9.1B: performance/resource measurements and controls, including any future multi-file queue
-  design, remain unstarted.
+- Phase 9.1B: completed locally; lifecycle and performance details are recorded below.
 - Phase 9.1C: parser archive/decompression bounds and clean-machine/release hardening remain
   unstarted.
 
+## Phase 9.1B Model Lifecycle and Indexing Performance
+
+- Added one shared lifecycle for Balanced and Fast chat providers. A switch unloads the prior
+  GroundNote-owned provider before loading the next; same-mode reuse avoids a redundant load.
+- Added ownership-aware cleanup for direct WinML and daemon-fallback model paths. Preloaded models
+  owned by another application are not unloaded.
+- Closed embedding cleanup gaps for load, first/later batch, vector/FTS persistence, integrity,
+  retrieval-query, interruption, and explicit shutdown failures.
+- Released retrieval embeddings before chat generation so normal RAG never retains embedding and
+  chat models at the same time.
+- Added operation-local, content-free stage diagnostics and real chunk progress. Technical metrics
+  remain hidden unless the debug toggle is enabled.
+- Reused uploader bytes and the precomputed SHA-256 digest, eliminating a second UploadedFile read
+  and filesystem hash while keeping duplicate detection before model work.
+- Verified one parse, one chunking pass, ordered batches, transactional later-batch failure, and
+  one controlled replacement on re-index.
+- Kept the default embedding batch size at `16` and validated the configurable range `1` through
+  `64`.
+- Added `scripts/benchmark_indexing.py`, which uses a generated or explicit fixture, isolated
+  temporary storage, sanitized JSON metrics, and final model/temp cleanup.
+- Representative real Foundry benchmark: 76,601 bytes, 76,360 characters, 121 chunks, eight
+  batches, 1.397 s model load, 83.273 s embedding, 84.815 s total, and 894.9 MB observed peak process
+  RSS. Loaded model count was zero before and after cleanup.
+- Real Fast → Balanced → Fast smoke produced three non-empty short responses, tracked the requested
+  active alias at each transition, and ended with no active lifecycle provider or cleanup warning.
+- Chat remains blocked during synchronous indexing. CPU-bound embedding dominated the measured
+  operation and safe simultaneous inference was not demonstrated; no background worker was added.
+
+## Phase 9.1B Validation
+
+- `uv sync`, Ruff check/format, mypy, full non-Foundry tests, coverage, Foundry check, fake and real
+  UI smoke, isolated benchmark, package version, and diff checks passed in the completion run.
+- Model lifecycle, indexing interruption, later-batch failure, vector/FTS failure, duplicate work,
+  metrics privacy, progress localization, and no-overlap behavior have focused regression coverage.
+- Foundry CLI `0.10.2`, Windows SDK `1.2.3`, Python `3.11.15`, required cached aliases, and local-only
+  inference were verified. The current catalog selects CPUExecutionProvider for the candidates.
+
 ## Next Phase
 
-Phase 9.1B is next only if explicitly requested. Phase 10 has not started.
+Phase 9.1C is next only if explicitly requested. Phase 9.1D and Phase 10 have not started.

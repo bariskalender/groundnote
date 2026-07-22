@@ -25,6 +25,8 @@ Model settings:
 - `GROUNDNOTE_CHAT_MODEL`: default chat model.
 - `GROUNDNOTE_CHAT_MODEL_FALLBACK`: low-resource fallback chat model.
 - `GROUNDNOTE_EMBEDDING_MODEL`: embedding model.
+- `GROUNDNOTE_EMBEDDING_BATCH_SIZE`: ordered local embedding batch size, from `1` through `64`;
+  the conservative default is `16`.
 
 Retrieval, upload, chunking, and generation settings:
 

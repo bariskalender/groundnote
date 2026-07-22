@@ -20,6 +20,21 @@
 | 8.1 | Knowledge Base UI and Operation State Stabilization | Complete |
 | 9 | Packaging and Release Preparation | Complete |
 | 9.1A | RAG Correctness, Index Recovery, and Managed File Safety | Complete |
+| 9.1B | Model Lifecycle and Indexing Performance | Complete |
+
+## Phase 9.1B Acceptance Notes
+
+- Added a shared lifecycle that permits at most one GroundNote-owned chat provider to remain active
+  across Fast and Balanced mode switches, with explicit failure rollback and shutdown cleanup.
+- Completed embedding cleanup across indexing, retrieval, storage/FTS failure, interruption, and
+  chat handoff paths without unloading models owned by another application.
+- Added safe indexing stage timings, real unit progress, bounded process resource measurements,
+  isolated benchmarking, and debug-only diagnostics.
+- Removed repeated upload-byte reads and file hashing while preserving duplicate detection before
+  embedding; verified one parse, one chunking pass, ordered batches, and transactional failures.
+- Retained synchronous sequential indexing and blocked chat during indexing based on measured CPU
+  contention; background queues remain deferred.
+- Phase 9.1C parser/release hardening remains next and unstarted.
 
 ## Phase 9.1A Acceptance Notes
 
@@ -33,7 +48,8 @@
   cannot become usable or cited.
 - Remove and clear-all now delete only validated GroundNote-managed copies represented by database
   records; original selected files and unrelated managed-directory files remain untouched.
-- Phase 9.1B performance/resource work and Phase 9.1C parser/release hardening remain deferred.
+- Phase 9.1B performance/resource work is complete; Phase 9.1C parser/release hardening remains
+  deferred.
 
 ## Phase 9 Acceptance Notes
 

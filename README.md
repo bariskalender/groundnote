@@ -181,6 +181,8 @@ metadata are available.
 - Phase 9 packaging and release preparation completed locally.
 - Phase 9.1A grounding correctness, interrupted-index recovery, and managed-copy safety completed
   locally.
+- Phase 9.1B single-chat-model lifecycle, indexing diagnostics, duplicate-work removal, and local
+  performance measurement completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
@@ -208,7 +210,8 @@ See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking
 `docs/phase-7-2-1-real-test-stability.md`, and
 `docs/phase-7-2-2-section-retrieval-ui-stability.md`, and
 `docs/phase-8-knowledge-base-session-management.md`, `docs/phase-9-packaging-release.md`,
-`docs/packaging-strategy.md`, and `docs/release-checklist.md` for current behavior and limitations.
+`docs/phase-9-1b-model-lifecycle-performance.md`, `docs/packaging-strategy.md`, and
+`docs/release-checklist.md` for current behavior and limitations.
 
 ## Privacy
 

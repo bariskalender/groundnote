@@ -12,6 +12,7 @@ compatible bug fixes.
 - Programmatic application version metadata.
 - Deterministic portable ZIP packaging that excludes private/local data and model files.
 - Packaging strategy and release checklist documentation.
+- Privacy-safe indexing stage diagnostics, real chunk progress, and an isolated indexing benchmark.
 
 ### Security and privacy
 
@@ -33,6 +34,12 @@ compatible bug fixes.
   integrity check in the committing transaction.
 - Managed upload copies no longer remain silently after successful Remove or Clear all actions;
   partial filesystem cleanup is reported with a sanitized localized warning.
+- Fast and Balanced mode switches now keep at most one GroundNote-owned chat provider active, and
+  provider/client/generation failures release only GroundNote-owned resources.
+- Indexing and query failure paths now release embedding resources, while RAG releases embeddings
+  before loading chat.
+- Upload indexing reuses the already-read bytes and SHA-256 digest instead of rereading and hashing
+  the same content.
 
 ### Existing product baseline
 

@@ -490,3 +490,48 @@ This ordering avoids a filesystem deletion followed by a database rollback that 
 Ready record pointing to a missing managed copy. It can leave an orphaned managed copy after a
 post-commit filesystem failure; automatic retry is deferred because the deleted row no longer
 provides durable ownership metadata and guessing from filenames would weaken path safety.
+
+## ADR-0045: Coordinate GroundNote-Owned Chat Models Through One Lifecycle
+
+- Status: Accepted
+- Date: 2026-07-22
+
+Balanced and Fast providers share a process-local lifecycle coordinator. Activating a different
+provider releases the current GroundNote-owned provider before loading the requested one; repeated
+same-mode use reuses the active provider. Load/client/generation failures roll back the new owner,
+and explicit shutdown is idempotent. Provider wrappers record whether GroundNote initiated a load,
+so an already-loaded model that may belong to another application is not unloaded.
+
+This establishes one active GroundNote chat model without broad daemon cleanup or assumptions about
+other Foundry Local consumers. Direct WinML loads are not reliably reflected by the CLI daemon's
+loaded-model count, so the lifecycle's active provider and ownership tests are authoritative.
+
+## ADR-0046: Keep Indexing Synchronous and Block Chat During Indexing
+
+- Status: Accepted
+- Date: 2026-07-22
+
+The representative 121-chunk workload spent 83.273 of 84.815 seconds in CPU-based embedding and
+reported `562.9%` process CPU. The selected chat models are also CPU variants, and concurrent model
+residency/inference was not demonstrated safe or useful on the target desktop. GroundNote therefore
+keeps the existing single-process sequential operation guard and shows a context-specific localized
+chat message while indexing.
+
+A background worker, durable queue ownership, user cancellation, and simultaneous chat/indexing
+would require lifecycle and recovery design outside this corrective phase. They remain deferred
+rather than being approximated through Streamlit reruns.
+
+## ADR-0047: Use Ordered Embedding Batches of 16 With Safe Stage Diagnostics
+
+- Status: Accepted
+- Date: 2026-07-22
+
+The existing batch size of `16` already reduced a 121-chunk operation to eight provider calls with
+stable ordering. Phase 9.1B keeps that conservative default and validates configuration from `1`
+through `64`; it does not maximize batch size based on a single machine. Later-batch failures commit
+no partial vectors and unload the provider.
+
+Indexing now records content-free stage durations, counts, model reuse, and best-effort process
+CPU/RSS. These details are opt-in through technical details. Filenames, paths, document text,
+prompts, questions, hashes, and vector values are excluded. The benchmark uses temporary storage
+and cleans GroundNote-owned models afterward.
