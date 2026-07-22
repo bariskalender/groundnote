@@ -125,6 +125,97 @@ def test_grounded_answer_invokes_chat_once_and_maps_citations() -> None:
     assert chat.requests[0].system_prompt != chat.requests[0].user_prompt
 
 
+@pytest.mark.parametrize(
+    ("evidence", "question", "language"),
+    [
+        (
+            "Tomatoes grow best in well-drained soil with regular watering.",
+            "RAM ve ROM arasındaki fark nedir?",
+            "tr",
+        ),
+        (
+            "Arabica coffee is grown at high elevations and is brewed after roasting.",
+            "How do Mercedes W123 chassis codes work?",
+            "en",
+        ),
+        (
+            "A car uses four tires, brakes, and a steering wheel.",
+            "Compare Arabica and Robusta in English and Turkish.",
+            "en",
+        ),
+        (
+            "Hydraulic systems transfer force through pressurized liquid.",
+            "RAM ve ROM bilgisayar belleği olarak nasıl farklıdır?",
+            "tr",
+        ),
+    ],
+)
+def test_unrelated_evidence_cannot_be_presented_as_grounded(
+    evidence: str,
+    question: str,
+    language: str,
+) -> None:
+    chat = FakeChatProvider(responses=["Unsupported model guess. [S1]"])
+    service = RagService(
+        settings=Settings(),
+        retrieval_service=FakeRetrievalService([retrieval_result(evidence)]),
+        chat_provider=chat,
+    )
+
+    answer = service.answer(RagRequest(query=question, response_language=language))
+
+    assert answer.grounded is False
+    assert answer.insufficient_evidence is True
+    assert answer.citations == []
+
+
+def test_relevant_ram_rom_evidence_can_still_produce_a_cited_answer() -> None:
+    chat = FakeChatProvider(
+        responses=[
+            "RAM geçici çalışma belleğidir; ROM kalıcı verileri saklar. [S1]",
+        ]
+    )
+    evidence = (
+        "RAM is volatile working memory used while programs run. "
+        "ROM stores non-volatile firmware and startup instructions."
+    )
+    service = RagService(
+        settings=Settings(),
+        retrieval_service=FakeRetrievalService([retrieval_result(evidence)]),
+        chat_provider=chat,
+    )
+
+    answer = service.answer(
+        RagRequest(query="RAM ve ROM arasındaki fark nedir?", response_language="tr")
+    )
+
+    assert answer.grounded is True
+    assert answer.insufficient_evidence is False
+    assert [citation.citation_id for citation in answer.citations] == ["S1"]
+    assert chat.calls == 1
+
+
+def test_relevant_turkish_evidence_keeps_turkish_answer_and_citation() -> None:
+    chat = FakeChatProvider(
+        responses=["Belgeye göre yerel indeks çevrimdışı çalışır. [S1]"],
+    )
+    service = RagService(
+        settings=Settings(),
+        retrieval_service=FakeRetrievalService(
+            [retrieval_result("Yerel indeks çevrimdışı çalışır ve verileri cihazda tutar.")]
+        ),
+        chat_provider=chat,
+    )
+
+    answer = service.answer(
+        RagRequest(query="Yerel indeks nasıl çalışır?", response_language="tr")
+    )
+
+    assert answer.grounded is True
+    assert answer.response_language == "tr"
+    assert [citation.citation_id for citation in answer.citations] == ["S1"]
+
+
 def test_model_refusal_with_citation_becomes_deterministic_insufficient_evidence() -> None:
     chat = FakeChatProvider(responses=["The documents do not contain enough evidence. [S1]"])
     service = RagService(
@@ -283,7 +374,7 @@ def test_normal_grounded_answer_is_not_an_insufficient_evidence_signal() -> None
     assert indicates_insufficient_evidence("SQLite stores embeddings. [S1]", language="en") is False
 
 
-def test_mb_table_question_does_not_treat_output_as_production_count() -> None:
+def test_mb_table_question_rejects_a_mismatched_retrieved_row() -> None:
     row = "123.193 617.952 300TD Turbodiesel 1979-86 92 28,219"
     chat = FakeChatProvider()
     service = RagService(
@@ -299,10 +390,9 @@ def test_mb_table_question_does_not_treat_output_as_production_count() -> None:
         )
     )
 
-    assert answer.grounded is True
-    assert "300TD" in answer.answer
-    assert "aynı model olarak kabul" in answer.answer
-    assert "üretim sayısı söyleyemem" in answer.answer
+    assert answer.grounded is False
+    assert answer.insufficient_evidence is True
+    assert answer.citations == []
     assert chat.calls == 0
 
 
@@ -339,14 +429,17 @@ def test_low_confidence_retrieval_skips_chat_call() -> None:
     assert chat.calls == 0
 
 
-def test_local_chassis_answer_keeps_chassis_and_engine_codes_separate() -> None:
-    chat = FakeChatProvider(responses=["Şasi kodu gövde ailesini açıklar. [S1]"])
+def test_chassis_answer_is_generated_from_relevant_retrieved_evidence() -> None:
+    chat = FakeChatProvider(
+        responses=["Şasi kodu gövde ailesini açıklar; motor kodu ayrıdır. [S1]"]
+    )
     service = RagService(
         settings=Settings(),
         retrieval_service=FakeRetrievalService(
             [
                 retrieval_result(
-                    "Chassis Codes: first three digits specify general body style, e.g. W123. "
+                    "Mercedes şasi kodları use chassis codes: first three digits specify "
+                    "general body style, e.g. W123. "
                     "Engine Codes: first digit indicates gasoline 1 or Diesel 6."
                 )
             ]
@@ -355,13 +448,13 @@ def test_local_chassis_answer_keeps_chassis_and_engine_codes_separate() -> None:
     )
 
     answer = service.answer(
-        RagRequest(query="Mercedes şasi kodları nasıl okunuyor? Türkçe açıkla.")
+        RagRequest(query="Mercedes şasi kodları nasıl okunuyor?", response_language="tr")
     )
 
-    assert chat.calls == 0
+    assert chat.calls == 1
     assert answer.grounded is True
-    assert "gövde/şasi ailesi" in answer.answer
-    assert "Motor kodları ayrı" in answer.answer
+    assert "gövde ailesini" in answer.answer
+    assert "motor kodu ayrıdır" in answer.answer
 
 
 def test_safe_performance_report_contains_only_metadata() -> None:
