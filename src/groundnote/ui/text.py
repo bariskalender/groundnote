@@ -13,8 +13,38 @@ TEXT: dict[str, dict[str, str]] = {
         "knowledge_base": "Knowledge Base",
         "indexed_documents": "Indexed documents",
         "upload_help": "Select PDF, DOCX, TXT, or Markdown files. Processing starts automatically.",
-        "upload_limit": "Maximum file size: {size} MB. OCR is not supported.",
+        "upload_limit": (
+            "Up to {count} files, {size} MB each, and {total} MB combined. OCR is not supported."
+        ),
         "selected_files": "{count} file(s) selected",
+        "upload_file_count_limit": "Select no more than {count} files at once.",
+        "upload_total_size_limit": "The combined selection must not exceed {size} MB.",
+        "upload_queue": "Upload queue",
+        "queue_overview": "{total} item(s) · {waiting} waiting",
+        "queue_session_notice": (
+            "Waiting files are kept only in this browser session. A full refresh may require "
+            "selecting them again."
+        ),
+        "queue_item_position": "{current} of {total} · {filename}",
+        "queue_position": "Processing document {current} of {total}: {filename}",
+        "cancel_waiting_item": "Cancel waiting item",
+        "clear_queue_results": "Clear finished queue results",
+        "queue_memory_details": "Waiting: {waiting} · Retained upload bytes: {bytes}",
+        "queue_parsing": "Parsing",
+        "queue_chunking": "Chunking",
+        "queue_embedding": "Embedding",
+        "queue_saving": "Saving",
+        "queue_verifying": "Verifying",
+        "queue_interrupted": "Interrupted",
+        "queue_cancelled": "Cancelled",
+        "queue_summary_counts": (
+            "{indexed} indexed, {duplicate} already indexed, {failed} failed, "
+            "{cancelled} cancelled."
+        ),
+        "queue_summary_duration": "The upload queue finished in {duration}.",
+        "chat_busy_queue": (
+            "GroundNote is indexing documents. Chat will be available when the queue finishes."
+        ),
         "sources": "Sources",
         "ask_placeholder": "Ask about your documents",
         "no_indexed_documents": "No indexed documents",
@@ -156,7 +186,9 @@ TEXT: dict[str, dict[str, str]] = {
         "upload_documents": "Belgeleri yükle",
         "documents": "Belgeler",
         "upload_help": ("PDF, DOCX, TXT veya Markdown dosyalarını seçin. İşleme otomatik başlar."),
-        "upload_limit": "En büyük dosya boyutu: {size} MB. OCR desteklenmez.",
+        "upload_limit": (
+            "En fazla {count} dosya; dosya başına {size} MB ve toplam {total} MB. OCR desteklenmez."
+        ),
         "selected_files": "{count} dosya seçildi",
         "sources": "Kaynaklar",
         "ask_placeholder": "Belgelerin hakkında soru sor",
@@ -210,6 +242,34 @@ TEXT: dict[str, dict[str, str]] = {
 }
 
 TR_EXTRA_TEXT: dict[str, str] = {
+    "upload_file_count_limit": "Aynı anda en fazla {count} dosya seçin.",
+    "upload_total_size_limit": "Seçimin toplam boyutu {size} MB değerini aşmamalıdır.",
+    "upload_queue": "Yükleme kuyruğu",
+    "queue_overview": "{total} öğe · {waiting} bekliyor",
+    "queue_session_notice": (
+        "Bekleyen dosyalar yalnızca bu tarayıcı oturumunda tutulur. Tam yenilemeden sonra "
+        "dosyaları yeniden seçmeniz gerekebilir."
+    ),
+    "queue_item_position": "{current} / {total} · {filename}",
+    "queue_position": "{total} belgeden {current}. belge işleniyor: {filename}",
+    "cancel_waiting_item": "Bekleyen öğeyi iptal et",
+    "clear_queue_results": "Tamamlanan kuyruk sonuçlarını temizle",
+    "queue_memory_details": "Bekleyen: {waiting} · Tutulan yükleme baytı: {bytes}",
+    "queue_parsing": "Ayrıştırılıyor",
+    "queue_chunking": "Parçalanıyor",
+    "queue_embedding": "Embedding oluşturuluyor",
+    "queue_saving": "Kaydediliyor",
+    "queue_verifying": "Doğrulanıyor",
+    "queue_interrupted": "Yarıda kesildi",
+    "queue_cancelled": "İptal edildi",
+    "queue_summary_counts": (
+        "{indexed} belge indekslendi, {duplicate} belge zaten indekslenmişti, "
+        "{failed} belge başarısız oldu, {cancelled} belge iptal edildi."
+    ),
+    "queue_summary_duration": "Yükleme kuyruğu {duration} sürede tamamlandı.",
+    "chat_busy_queue": (
+        "GroundNote belgeleri indeksliyor. Kuyruk tamamlandığında sohbet yeniden kullanılabilir."
+    ),
     "groundnote_not_ready": (
         "GroundNote henüz hazır değil. Eksik bileşenleri görmek için "
         "`scripts/doctor.ps1` komutunu çalıştırın."

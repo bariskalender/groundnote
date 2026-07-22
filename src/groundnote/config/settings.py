@@ -69,6 +69,14 @@ class Settings(BaseSettings):
             "GROUNDNOTE_MAX_UPLOAD_MB",
         ),
     )
+    maximum_upload_files: int = Field(
+        default=10,
+        validation_alias=AliasChoices("GROUNDNOTE_MAX_UPLOAD_FILES"),
+    )
+    maximum_upload_total_size_mb: int = Field(
+        default=100,
+        validation_alias=AliasChoices("GROUNDNOTE_MAX_UPLOAD_TOTAL_MB"),
+    )
 
     chunk_target_characters: int = Field(
         default=900,
@@ -203,6 +211,20 @@ class Settings(BaseSettings):
             raise ValueError("maximum_upload_size_mb must be positive.")
         return value
 
+    @field_validator("maximum_upload_files")
+    @classmethod
+    def upload_file_count_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 25:
+            raise ValueError("maximum_upload_files must be between 1 and 25.")
+        return value
+
+    @field_validator("maximum_upload_total_size_mb")
+    @classmethod
+    def upload_total_size_must_be_bounded(cls, value: int) -> int:
+        if not 1 <= value <= 500:
+            raise ValueError("maximum_upload_total_size_mb must be between 1 and 500.")
+        return value
+
     @field_validator(
         "chunk_target_characters",
         "chunk_maximum_characters",
@@ -299,6 +321,10 @@ class Settings(BaseSettings):
         if self.retrieval_candidate_limit < self.rag_max_chunk_count:
             raise ValueError(
                 "retrieval_candidate_limit must be greater than or equal to rag_max_chunk_count."
+            )
+        if self.maximum_upload_total_size_mb < self.maximum_upload_size_mb:
+            raise ValueError(
+                "maximum_upload_total_size_mb must be greater than or equal to the per-file limit."
             )
         if self.database_path is None:
             raise ValueError("database_path could not be resolved.")

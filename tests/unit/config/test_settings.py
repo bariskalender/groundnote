@@ -15,6 +15,8 @@ def test_settings_defaults_do_not_create_directories(tmp_path: Path) -> None:
 
     assert settings.environment == "development"
     assert settings.chat_model == "phi-3.5-mini"
+    assert settings.maximum_upload_files == 10
+    assert settings.maximum_upload_total_size_mb == 100
     assert settings.database_path == data_dir / "database" / "groundnote.sqlite3"
     assert not data_dir.exists()
 
@@ -36,6 +38,10 @@ def test_settings_environment_overrides(monkeypatch: pytest.MonkeyPatch, tmp_pat
         ("top_k", 0),
         ("similarity_threshold", 2.0),
         ("maximum_upload_size_mb", 0),
+        ("maximum_upload_files", 0),
+        ("maximum_upload_files", 26),
+        ("maximum_upload_total_size_mb", 0),
+        ("maximum_upload_total_size_mb", 501),
         ("chunk_target_characters", 0),
         ("chunk_overlap_characters", -1),
         ("maximum_output_tokens", 4096),
@@ -56,6 +62,11 @@ def test_settings_reject_invalid_chunk_relationships() -> None:
         Settings(chunk_target_characters=100, chunk_overlap_characters=100)
     with pytest.raises(ValidationError):
         Settings(chunk_target_characters=100, chunk_minimum_characters=101)
+
+
+def test_settings_reject_total_upload_limit_below_per_file_limit() -> None:
+    with pytest.raises(ValidationError):
+        Settings(maximum_upload_size_mb=50, maximum_upload_total_size_mb=49)
 
 
 def test_settings_reject_invalid_database_suffix(tmp_path: Path) -> None:

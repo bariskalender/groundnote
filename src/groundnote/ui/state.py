@@ -38,6 +38,8 @@ ACTIVE_UPLOAD_IDENTITY = "active_upload_identity"
 COMPLETED_UPLOAD_IDENTITIES = "completed_upload_identities"
 FAILED_UPLOAD_IDENTITIES = "failed_upload_identities"
 UPLOAD_ITEMS = "upload_items"
+UPLOAD_SUBMISSION_IDENTITIES = "upload_submission_identities"
+LAST_UPLOAD_QUEUE_SUMMARY = "last_upload_queue_summary"
 SHOW_DEBUG_DETAILS = "show_debug_details"
 PENDING_DELETE_DOCUMENT_ID = "pending_delete_document_id"
 PENDING_CLEAR_DOCUMENTS = "pending_clear_documents"
@@ -69,6 +71,8 @@ DEFAULT_SESSION_STATE: dict[str, object] = {
     COMPLETED_UPLOAD_IDENTITIES: set(),
     FAILED_UPLOAD_IDENTITIES: set(),
     UPLOAD_ITEMS: {},
+    UPLOAD_SUBMISSION_IDENTITIES: [],
+    LAST_UPLOAD_QUEUE_SUMMARY: None,
     SHOW_DEBUG_DETAILS: False,
     PENDING_DELETE_DOCUMENT_ID: None,
     PENDING_CLEAR_DOCUMENTS: False,
@@ -208,7 +212,7 @@ def begin_operation(
         file_identity=file_identity,
     )
     state[ACTIVE_OPERATION] = operation
-    if operation_type == "upload":
+    if operation_type in {"upload", "upload_queue"}:
         state[UPLOAD_IN_PROGRESS] = True
     if operation_type == "question":
         state[QUESTION_IN_PROGRESS] = True
@@ -238,7 +242,7 @@ def end_operation(
     state[UPLOAD_IN_PROGRESS] = False
     state[INDEXING_IN_PROGRESS] = False
     state[QUESTION_IN_PROGRESS] = False
-    if operation.operation_type == "upload":
+    if operation.operation_type in {"upload", "upload_queue"}:
         state[ACTIVE_UPLOAD_IDENTITY] = None
 
 
