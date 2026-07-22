@@ -420,3 +420,27 @@ Phase 8.1 extends this session-only policy with a single privacy-safe flash noti
 operation feedback. The notice contains localized display text and severity only, survives one
 Streamlit rerun, and is consumed after rendering. Uploaded bytes, document content, raw paths,
 prompts, vectors, and exceptions are never stored in the flash state.
+
+## ADR-0040: Ship A Portable Source Archive Before A Native Installer
+
+- Status: Accepted
+- Date: 2026-07-22
+
+GroundNote `0.9.0` uses an allowlisted, deterministic source ZIP with uv-managed Python 3.11 and
+PowerShell setup/launcher scripts. Foundry Local and its cached models remain external prerequisites.
+This avoids fragile Streamlit/preview-SDK freezer hooks, unsigned executable antivirus false
+positives, model bundling, and premature installer upgrade complexity. PyInstaller, Nuitka,
+Briefcase, MSI, and MSIX remain documented future options after clean-machine, signing, licensing,
+and upgrade/rollback validation.
+
+## ADR-0041: Use Token-Scoped Launcher Metadata For Safe Shutdown
+
+- Status: Accepted
+- Date: 2026-07-22
+
+The Windows launcher binds Streamlit to loopback and stores only its listener PID, launcher PID,
+port, UTC start time, and a random session token in the platform-local GroundNote runtime folder.
+The stop script verifies the token against the exact process command line and verifies the listener
+owner before terminating anything. It never kills all Python processes and leaves Foundry Local
+unchanged unless the user explicitly supplies `-StopFoundry`, because the local daemon may be shared
+with another application.

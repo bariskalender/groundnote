@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-Phase 7.2.2 complete locally. Phase 8 has not started.
+Phase 9 complete locally. Validation passed and local commits are pending; nothing has been pushed.
 
 ## Completed Tasks
 
@@ -667,6 +667,71 @@ Phase 7.2.2 complete locally. Phase 8 has not started.
 - Local application composition caches are separated by a hash of path configuration to avoid
   cross-database cache reuse.
 
+## Phase 9 Packaging and Release Preparation
+
+- Added version `0.9.0` in `pyproject.toml` as the single source of truth and exposed it through
+  `importlib.metadata`.
+- Added a privacy-safe `python -m groundnote doctor` command for Python, uv, dependency,
+  configuration, directory, SQLite, Foundry, cached-model, loaded-model, port, import, and optional
+  Git checks.
+- Added idempotent `setup_windows.ps1`, localhost-only `start_groundnote.ps1`, PID/token-scoped
+  `stop_groundnote.ps1`, `doctor.ps1`, and `build_release_archive.ps1` workflows.
+- Added localized first-run doctor guidance and application version display without a UI redesign.
+- Added a deterministic allowlisted portable ZIP builder with fixed entry timestamps and explicit
+  exclusion of private/local/generated data.
+- Added changelog, Phase 9 architecture notes, packaging strategy, and release checklist.
+- Selected a portable source ZIP plus setup/launcher scripts; native installers remain deferred.
+
+## Commands Run In Phase 9
+
+- Initial governance, Git synchronization, environment, version, Foundry, path, setup, launcher,
+  and release-file audit.
+- Foundry CLI `--help`, `model --help`, `cache --help`, JSON status, and cache introspection.
+- `uv sync`.
+- Targeted Phase 9 Ruff, mypy, version, diagnostics, archive, PowerShell, and bootstrap tests.
+- PowerShell language-parser validation for every `.ps1` script.
+- `uv run python -m groundnote --version`.
+- `uv run python -m groundnote doctor --port 18507`.
+- Two isolated `scripts/setup_windows.ps1` runs with an existing-file preservation check.
+- Isolated launcher HTTP 200, duplicate-start, scoped-stop, and listener-cleanup smoke on port
+  `18508`.
+- Portable archive build and member audit: 143 entries, 0 blocked entries, 0 missing required
+  entries; generated smoke archive removed afterward.
+- `uv run ruff check .`.
+- `uv run ruff format --check .`.
+- `uv run mypy src`.
+- `uv run pytest -m "not foundry"`.
+- `uv run pytest --cov=groundnote --cov-report=term-missing`.
+- `uv run python scripts/check_foundry.py`.
+- `uv run python scripts/smoke_ui_pipeline.py`.
+- `uv run python scripts/smoke_ui_real.py`.
+
+## Phase 9 Test Status
+
+- Full non-Foundry suite: Passed, 264 tests.
+- Coverage: Passed, 264 tests and 78% total coverage.
+- Phase 9 targeted tests: Passed, 13 tests before full regression.
+- PowerShell syntax: Passed for setup, start, stop, doctor, and archive scripts.
+- Doctor: Passed with version `0.9.0`, valid SQLite, cached required models, zero initially loaded
+  models, application import, and safe output.
+- Setup idempotence: Passed twice in an isolated path containing spaces; existing data preserved.
+- Launcher: Passed with localhost HTTP 200, duplicate detection, and zero listener after scoped stop.
+- Portable ZIP: Passed deterministic/unit checks and real build member inspection.
+- Fake and real UI pipelines: Passed; real smoke produced grounded English and Turkish answers,
+  trusted citations, and insufficient-evidence behavior using a temporary fixture.
+
+## Phase 9 Known Limitations
+
+- The portable archive still requires uv and Microsoft Foundry Local to be installed separately.
+- First-time dependency and model downloads require internet and remain explicit user actions.
+- The launcher and setup workflow were validated on the current Windows machine and isolated local
+  paths, but not yet on a separate clean Windows account or virtual machine.
+- Foundry CLI `0.10.2` may start its daemon for cache inspection; the doctor restores an initially
+  stopped daemon before exiting.
+- A full signed MSI/EXE/MSIX installer, automatic updates, system service, and bundled models are
+  intentionally not part of Phase 9.
+
 ## Next Phase
 
-Phase 9: Packaging and release preparation (not started).
+No next numbered phase is defined. Await explicit direction for clean-machine release validation or
+final portfolio/demo polish.

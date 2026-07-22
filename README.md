@@ -2,6 +2,8 @@
 
 Private, Offline RAG Study Assistant powered by Microsoft Foundry Local
 
+Current pre-release version: **0.9.0**
+
 ## About the Project
 
 GroundNote is a local document assistant mainly designed for university students. The goal is to
@@ -74,7 +76,8 @@ hardware.
 
 ## Planned Features
 
-- Additional packaging and final demonstration polish.
+- Full native installer evaluation after the portable release workflow is proven.
+- Final demonstration and portfolio polish.
 
 ## Technology Stack
 
@@ -89,6 +92,60 @@ hardware.
 - mypy
 - uv
 
+## Requirements
+
+- Windows 11 (primary target).
+- Microsoft Foundry Local CLI: `winget install Microsoft.FoundryLocal`.
+- uv: `winget install --id=astral-sh.uv -e`.
+- Enough disk space for selected local models; models are not bundled with GroundNote.
+- Internet for initial dependency/model downloads; cached inference remains local.
+
+Python 3.11 is managed by uv, so a separate system Python installation is not required.
+
+## Windows Setup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/setup_windows.ps1
+```
+
+Setup is idempotent. It synchronizes locked dependencies, creates missing application directories,
+initializes/migrates SQLite, and runs the doctor. It does not replace existing user data and does
+not download Foundry models. Use `-DryRun` to inspect the workflow without changing the environment.
+
+## Environment Check
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/doctor.ps1
+```
+
+The doctor reports `OK`, `Warning`, or `Error` for the runtime, configuration, local data, SQLite,
+Foundry Local, cached required models, Streamlit port, application import, and Git cleanliness. It
+does not start Streamlit, load/download models, or print private paths and secrets.
+
+## Start and Stop
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start_groundnote.ps1
+powershell -ExecutionPolicy Bypass -File scripts/stop_groundnote.ps1
+```
+
+The launcher binds to `127.0.0.1:8501`, starts Foundry when needed, validates readiness, prints the
+URL, and opens the browser. If 8501 belongs to another app, it selects the first available local
+port through 8510. Duplicate launches report the existing instance. The stop script validates PID,
+port, and a random launcher token, so it never broadly kills Python processes.
+
+Foundry is left unchanged on normal stop because another application may share it. To explicitly
+stop Foundry too, run `scripts/stop_groundnote.ps1 -StopFoundry`.
+
+## Troubleshooting
+
+- Run `scripts/doctor.ps1` first; a non-zero exit code means action is required.
+- If Foundry is stopped, run `foundry server start`. CLI `0.10.2` uses `server` commands.
+- The doctor reports missing aliases; models are downloaded only by an explicit
+  `foundry model download <alias>` command.
+- OCR is not supported; scanned PDFs need searchable text.
+- Browser stack traces and technical details remain hidden by default.
+
 ## Local Development
 
 ```powershell
@@ -98,6 +155,9 @@ uv run ruff check .
 uv run mypy src
 uv run pytest -m "not foundry"
 ```
+
+Normal users should prefer `scripts/start_groundnote.ps1` so duplicate detection and scoped stop
+metadata are available.
 
 ## Project Status
 
@@ -117,6 +177,8 @@ uv run pytest -m "not foundry"
   control patch completed locally.
 - Phase 7.2.2 section retrieval, answer completion, and UI state fixes completed locally.
 - Phase 8 Knowledge Base and lightweight session management completed locally.
+- Phase 8.1 Knowledge Base action and operation-state stabilization completed locally.
+- Phase 9 packaging and release preparation completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
@@ -139,7 +201,8 @@ See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking
 `docs/phase-7-1-stabilization.md`, `docs/phase-7-2-optimization.md`, and
 `docs/phase-7-2-1-real-test-stability.md`, and
 `docs/phase-7-2-2-section-retrieval-ui-stability.md`, and
-`docs/phase-8-knowledge-base-session-management.md` for the current behavior and limitations.
+`docs/phase-8-knowledge-base-session-management.md`, `docs/phase-9-packaging-release.md`,
+`docs/packaging-strategy.md`, and `docs/release-checklist.md` for current behavior and limitations.
 
 ## Privacy
 
@@ -152,6 +215,20 @@ source documents.
 
 The interface supports English and Turkish. Answers follow the question language by default, with
 an optional session setting for English or Turkish. Chat history is session-only.
+
+GroundNote contains no telemetry or analytics. Setup, launcher, doctor, and archive tools do not
+upload documents, prompts, answers, embeddings, logs, or configuration. The portable archive
+excludes local databases, documents, logs, models, caches, `.env`, and test artifacts.
+
+## Portable Release Archive
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/build_release_archive.ps1
+```
+
+This produces `dist/groundnote-0.9.0.zip` with runtime source, locked dependencies, setup/launcher
+scripts, configuration example, documentation, changelog, and license. Foundry models and user data
+are never bundled. See `docs/packaging-strategy.md` and `docs/release-checklist.md`.
 
 ## License
 

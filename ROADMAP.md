@@ -18,6 +18,19 @@
 | 7.2.2 | Section Retrieval, Answer Completion, and UI State Fixes | Complete |
 | 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Complete |
 | 8.1 | Knowledge Base UI and Operation State Stabilization | Complete |
+| 9 | Packaging and Release Preparation | Complete |
+
+## Phase 9 Acceptance Notes
+
+- Added GroundNote `0.9.0` as single-source package metadata exposed through
+  `importlib.metadata`.
+- Added idempotent Windows setup, privacy-safe doctor, localhost launcher, and PID/token-scoped
+  stop workflows without automatic model downloads or broad process termination.
+- Added a deterministic portable source ZIP builder that excludes local data, documents,
+  databases, logs, models, caches, secrets, tests, and generated artifacts.
+- Documented the portable ZIP as the recommended release direction; native installers remain
+  deferred until clean-machine, signing, antivirus, upgrade, and licensing checks are complete.
+- Preserved existing RAG, Knowledge Base, session, privacy, and local model behavior.
 
 ## Phase 8 Acceptance Notes
 
