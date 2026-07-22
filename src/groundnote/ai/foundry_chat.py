@@ -30,6 +30,8 @@ class FoundryChatProvider:
         self._client: Any | None = None
         self._local_service_client: Any | None = None
         self._local_service_model_id: str | None = None
+        self._direct_model_owned = False
+        self._local_service_model_owned = False
 
     def ensure_model_available(self, *, download: bool = False) -> ModelInfo:
         model = self._manager.get_model(self.model_alias)
@@ -42,12 +44,15 @@ class FoundryChatProvider:
             return
         try:
             self._model = self._manager.get_model(self.model_alias)
+            self._direct_model_owned = not self._model_was_loaded(self._model)
             self._model.load()
             self._client = self._model.get_chat_client()
         except Exception:
+            self._rollback_direct_load()
             try:
                 self._load_via_local_service()
             except Exception as fallback_exc:
+                self._rollback_local_service_load()
                 raise FoundryProviderError(
                     f"Could not load chat model: {self.model_alias}"
                 ) from fallback_exc
@@ -96,22 +101,22 @@ class FoundryChatProvider:
 
     def unload(self) -> None:
         if self._local_service_model_id is not None:
-            self._unload_local_service_model()
-            self._local_service_client = None
-            self._local_service_model_id = None
-            self._client = None
-            self._model = None
+            try:
+                if self._local_service_model_owned:
+                    self._unload_local_service_model()
+            finally:
+                self._clear_provider_state()
             return
         if self._model is not None:
             try:
-                self._model.unload()
+                if self._direct_model_owned:
+                    self._model.unload()
             except Exception as exc:
                 raise FoundryProviderError(
                     f"Could not unload chat model: {self.model_alias}"
                 ) from exc
             finally:
-                self._client = None
-                self._model = None
+                self._clear_provider_state()
 
     def _generate_text(
         self,
@@ -155,13 +160,17 @@ class FoundryChatProvider:
 
     def _load_via_local_service(self) -> None:
         """Use the local OpenAI-compatible Foundry daemon when direct SDK load is unavailable."""
-        model_id = self._model_id()
+        model = self._manager.get_model(self.model_alias)
+        model_id = str(getattr(model, "id", "")).strip()
+        if not model_id:
+            raise FoundryProviderError("Foundry Local chat model id is unavailable.")
+        self._local_service_model_id = model_id
+        self._local_service_model_owned = not self._model_was_loaded(model)
         self._run_foundry(["model", "load", model_id], timeout_seconds=180)
         base_url = self._local_service_base_url()
         from openai import OpenAI
 
         self._local_service_client = OpenAI(base_url=f"{base_url}/v1", api_key="local-foundry")
-        self._local_service_model_id = model_id
         self._client = None
 
     def _unload_local_service_model(self) -> None:
@@ -180,13 +189,49 @@ class FoundryChatProvider:
             raise FoundryProviderError("Foundry Local chat model id is unavailable.")
         return model_id
 
+    def _rollback_direct_load(self) -> None:
+        model = self._model
+        try:
+            if model is not None and self._direct_model_owned:
+                model.unload()
+        except Exception:
+            pass
+        finally:
+            self._client = None
+            self._model = None
+            self._direct_model_owned = False
+
+    def _rollback_local_service_load(self) -> None:
+        try:
+            if self._local_service_model_id is not None and self._local_service_model_owned:
+                self._unload_local_service_model()
+        except Exception:
+            pass
+        finally:
+            self._clear_provider_state()
+
+    def _clear_provider_state(self) -> None:
+        self._local_service_client = None
+        self._local_service_model_id = None
+        self._local_service_model_owned = False
+        self._client = None
+        self._model = None
+        self._direct_model_owned = False
+
+    @staticmethod
+    def _model_was_loaded(model: Any) -> bool:
+        try:
+            return bool(getattr(model, "is_loaded", False))
+        except Exception:
+            return True
+
     @classmethod
     def _local_service_base_url(cls) -> str:
         completed = cls._run_foundry(["server", "status"], timeout_seconds=30)
         match = re.search(r"http://(?:127\.0\.0\.1|localhost|\[::1\]|::1):\d+", completed.stdout)
         if match is None:
             raise FoundryProviderError("Foundry Local service URL is unavailable.")
-        return match.group(0).replace("[::1]", "::1")
+        return match.group(0)
 
     @staticmethod
     def _run_foundry(

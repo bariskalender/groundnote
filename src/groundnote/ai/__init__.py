@@ -7,6 +7,7 @@ from groundnote.ai.errors import (
     FoundryProviderError,
 )
 from groundnote.ai.interfaces import ChatProvider, EmbeddingProvider
+from groundnote.ai.lifecycle import ChatModelLifecycle, ManagedChatProvider
 from groundnote.ai.models import (
     ChatGenerationRequest,
     ChatGenerationResult,
@@ -20,6 +21,7 @@ __all__ = [
     "ChatGenerationRequest",
     "ChatGenerationResult",
     "ChatMessage",
+    "ChatModelLifecycle",
     "ChatProvider",
     "ChatResult",
     "EmbeddingBatchResult",
@@ -29,4 +31,5 @@ __all__ = [
     "FoundryModelUnavailableError",
     "FoundryProviderError",
     "ModelInfo",
+    "ManagedChatProvider",
 ]

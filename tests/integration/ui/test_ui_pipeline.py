@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from groundnote.ai.fakes import FakeChatProvider, FakeEmbeddingProvider
 from groundnote.config import Settings
 from groundnote.domain import DocumentStatus, SupportedFileType
+from groundnote.embeddings import EmbeddingGenerationError
 from groundnote.ui import build_application_context
 from groundnote.ui.formatting import citation_to_view
 from groundnote.ui.models import UploadOutcomeKind
@@ -21,6 +24,12 @@ class UnloadFailChatProvider(FakeChatProvider):
     def unload(self) -> None:
         self.loaded = False
         raise RuntimeError("synthetic unload failure")
+
+
+class QueryFailEmbeddingProvider(FakeEmbeddingProvider):
+    def embed_one(self, text: str):
+        del text
+        raise RuntimeError("synthetic query embedding failure")
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -195,6 +204,24 @@ def test_model_unload_failure_does_not_corrupt_index_or_grounded_answer(tmp_path
     assert answer.answer.grounded is True
     assert embedding.loaded is False
     assert chat.loaded is False
+
+
+def test_query_embedding_failure_releases_warm_provider(tmp_path: Path) -> None:
+    embedding = QueryFailEmbeddingProvider(dimension=4)
+    context = build_application_context(
+        _settings(tmp_path).model_copy(update={"keep_models_loaded": True}),
+        embedding_provider=embedding,
+        chat_provider=FakeChatProvider(),
+    )
+    context.document_workflow.process_and_index(
+        original_filename="query-failure.txt",
+        data=b"Evidence is indexed before the synthetic query failure.",
+    )
+
+    with pytest.raises(EmbeddingGenerationError):
+        context.retrieval_service.search("What is the evidence?")
+
+    assert embedding.loaded is False
 
 
 def test_corrupt_upload_does_not_stop_later_valid_file(tmp_path: Path) -> None:

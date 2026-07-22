@@ -70,8 +70,7 @@ class SemanticRetrievalService:
             self.embedding_service.load()
             query_vector = self.embedding_service.embed_query(query.text)
         except Exception:
-            if not self.settings.keep_models_loaded:
-                self._unload_embedding_model()
+            self._unload_embedding_model()
             raise
         finally:
             if not self.settings.keep_models_loaded:

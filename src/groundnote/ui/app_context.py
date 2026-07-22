@@ -9,6 +9,7 @@ from groundnote.ai.foundry_chat import FoundryChatProvider
 from groundnote.ai.foundry_embeddings import FoundryEmbeddingProvider
 from groundnote.ai.foundry_manager import FoundryManager
 from groundnote.ai.interfaces import ChatProvider
+from groundnote.ai.lifecycle import ChatModelLifecycle
 from groundnote.bootstrap import ApplicationDependencies, initialize_application
 from groundnote.config import Settings
 from groundnote.documents import DocumentProcessingService
@@ -35,6 +36,7 @@ class ApplicationContext:
     connection_factory: SQLiteConnectionFactory
     unit_of_work_factory: SQLiteUnitOfWorkFactory
     foundry_manager: FoundryManager
+    chat_model_lifecycle: ChatModelLifecycle
     embedding_provider: BatchEmbeddingProvider
     chat_provider: ChatProvider
     fast_chat_provider: ChatProvider
@@ -79,7 +81,10 @@ def build_application_context(
         resolved_settings.chat_model,
         manager,
     )
-    fast_chat_provider = FoundryChatProvider(resolved_settings.fast_chat_model, manager)
+    raw_fast_chat_provider = FoundryChatProvider(resolved_settings.fast_chat_model, manager)
+    chat_model_lifecycle = ChatModelLifecycle()
+    managed_chat_provider = chat_model_lifecycle.register(resolved_chat_provider)
+    fast_chat_provider = chat_model_lifecycle.register(raw_fast_chat_provider)
     embedding_service = EmbeddingService(
         settings=resolved_settings,
         provider=resolved_embedding_provider,
@@ -106,7 +111,7 @@ def build_application_context(
     rag_service = RagService(
         settings=resolved_settings,
         retrieval_service=retrieval_service,
-        chat_provider=resolved_chat_provider,
+        chat_provider=managed_chat_provider,
     )
     fast_settings = resolved_settings.model_copy(
         update={
@@ -139,8 +144,9 @@ def build_application_context(
         connection_factory=connection_factory,
         unit_of_work_factory=unit_of_work_factory,
         foundry_manager=manager,
+        chat_model_lifecycle=chat_model_lifecycle,
         embedding_provider=resolved_embedding_provider,
-        chat_provider=resolved_chat_provider,
+        chat_provider=managed_chat_provider,
         fast_chat_provider=fast_chat_provider,
         embedding_service=embedding_service,
         document_processing_service=document_processing_service,
@@ -160,13 +166,9 @@ def build_application_context(
 def unload_local_models(context: ApplicationContext) -> list[str]:
     """Best-effort local model cleanup for the current Streamlit session."""
     warnings: list[str] = []
-    for name, provider in (
-        ("embedding", context.embedding_service),
-        ("chat", context.chat_provider),
-        ("fast_chat", context.fast_chat_provider),
-    ):
-        try:
-            provider.unload()
-        except Exception:
-            warnings.append(f"{name}_unload_failed")
+    try:
+        context.embedding_service.unload()
+    except Exception:
+        warnings.append("embedding_unload_failed")
+    warnings.extend(context.chat_model_lifecycle.shutdown())
     return warnings
