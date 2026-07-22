@@ -18,6 +18,21 @@ compatible bug fixes.
 - Launcher binds Streamlit to loopback only and records a random session token for scoped cleanup.
 - Doctor output excludes private paths, environment values, documents, prompts, vectors, and keys.
 - No telemetry, cloud API, model bundle, or automatic model download was added.
+- Topic-specific factual shortcuts were removed so unrelated evidence cannot receive a false
+  grounded citation.
+- Remove and clear-all delete only canonically validated GroundNote-managed copies; external
+  originals, traversal targets, symlinks/reparse points, and unrelated files are never removed.
+
+### Fixed
+
+- Ready now requires complete chunks, compatible float32 embeddings, matching model metadata, and
+  consistent FTS rows.
+- Bootstrap reconciles interrupted indexing and incomplete indexes into a retryable,
+  non-searchable state without affecting unrelated Ready documents.
+- Indexing failures clean partial embeddings and FTS rows, and final Ready status is gated by an
+  integrity check in the committing transaction.
+- Managed upload copies no longer remain silently after successful Remove or Clear all actions;
+  partial filesystem cleanup is reported with a sanitized localized warning.
 
 ### Existing product baseline
 

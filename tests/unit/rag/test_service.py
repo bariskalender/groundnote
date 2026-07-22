@@ -207,9 +207,7 @@ def test_relevant_turkish_evidence_keeps_turkish_answer_and_citation() -> None:
         chat_provider=chat,
     )
 
-    answer = service.answer(
-        RagRequest(query="Yerel indeks nasıl çalışır?", response_language="tr")
-    )
+    answer = service.answer(RagRequest(query="Yerel indeks nasıl çalışır?", response_language="tr"))
 
     assert answer.grounded is True
     assert answer.response_language == "tr"

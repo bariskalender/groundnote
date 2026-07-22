@@ -9,7 +9,12 @@ import pytest
 from groundnote.ai.fakes import FakeChatProvider, FakeEmbeddingProvider
 from groundnote.ai.models import EmbeddingBatchResult
 from groundnote.config import Settings
-from groundnote.documents import UnsupportedFileTypeError
+from groundnote.documents import (
+    ManagedFileCleanupResult,
+    ManagedFileCleanupStatus,
+    UnsupportedFileTypeError,
+    remove_managed_document_copy,
+)
 from groundnote.domain import DocumentStatus, SupportedFileType
 from groundnote.embeddings import EmbeddingGenerationError, EmbeddingModelLoadError
 from groundnote.ui import build_application_context
@@ -375,10 +380,14 @@ def test_delete_document_removes_chunks_embeddings_and_retrieval_results(tmp_pat
         original_filename="old-phases.txt",
         data=b"Phase roadmap content that should disappear after deletion.",
     )
+    assert context.settings.document_directory is not None
+    managed_files = list(context.settings.document_directory.iterdir())
+    assert len(managed_files) == 1
 
     deleted = context.document_workflow.delete_document(upload.document.document_id)
 
     assert deleted.original_filename == "old-phases.txt"
+    assert managed_files[0].exists() is False
     assert context.document_workflow.list_documents() == []
     retrieval = context.retrieval_service.search(
         "Phase roadmap",
@@ -387,7 +396,7 @@ def test_delete_document_removes_chunks_embeddings_and_retrieval_results(tmp_pat
     assert retrieval.results == []
 
 
-def test_clear_all_documents_removes_index_rows_but_not_original_local_files(
+def test_clear_all_documents_removes_managed_copies_but_not_external_originals(
     tmp_path: Path,
 ) -> None:
     context = build_application_context(
@@ -395,14 +404,18 @@ def test_clear_all_documents_removes_index_rows_but_not_original_local_files(
         embedding_provider=FakeEmbeddingProvider(dimension=4),
         chat_provider=FakeChatProvider(),
     )
+    external_original = tmp_path / "external original.txt"
+    external_original.write_text("First indexed note.", encoding="utf-8")
     first = context.document_workflow.process_and_index(
-        original_filename="first.txt", data=b"First indexed note."
+        original_filename="first.txt", data=external_original.read_bytes()
     )
     second = context.document_workflow.process_and_index(
         original_filename="second.txt", data=b"Second indexed note."
     )
     assert context.settings.document_directory is not None
     stored_files = list(context.settings.document_directory.iterdir())
+    unrelated = context.settings.document_directory / "unrelated-local-file.txt"
+    unrelated.write_text("Not represented by a GroundNote record.", encoding="utf-8")
 
     cleared = context.document_workflow.clear_all_documents()
 
@@ -411,7 +424,9 @@ def test_clear_all_documents_removes_index_rows_but_not_original_local_files(
         second.document.document_id,
     }
     assert context.document_workflow.list_documents() == []
-    assert list(context.settings.document_directory.iterdir()) == stored_files
+    assert all(path.exists() is False for path in stored_files)
+    assert external_original.exists()
+    assert unrelated.exists()
     retrieval = context.retrieval_service.search("indexed note", minimum_score=-1.0)
     assert retrieval.results == []
     assert context.settings.database_path is not None
@@ -420,6 +435,124 @@ def test_clear_all_documents_removes_index_rows_but_not_original_local_files(
     inventory = context.question_workflow.answer("What documents are indexed?")
     assert inventory.answer.model == "deterministic-inventory"
     assert "No indexed documents" in inventory.answer.answer
+
+
+def test_missing_managed_copy_does_not_corrupt_document_deletion(tmp_path: Path) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    upload = context.document_workflow.process_and_index(
+        original_filename="already-missing.txt",
+        data=b"A managed copy may already be missing.",
+    )
+    assert context.settings.document_directory is not None
+    managed_file = next(context.settings.document_directory.iterdir())
+    managed_file.unlink()
+
+    deleted = context.document_workflow.delete_document(upload.document.document_id)
+
+    assert deleted.managed_copy_cleanup_warning is False
+    assert context.document_workflow.list_documents() == []
+
+
+def test_traversal_metadata_never_deletes_outside_file_and_reports_warning(
+    tmp_path: Path,
+) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    upload = context.document_workflow.process_and_index(
+        original_filename="unsafe-metadata.txt",
+        data=b"Database path metadata must not escape managed storage.",
+    )
+    assert context.settings.database_path is not None
+    outside = context.settings.document_directory.parent / "outside.txt"  # type: ignore[union-attr]
+    outside.write_text("external original", encoding="utf-8")
+    with sqlite3.connect(context.settings.database_path) as connection:
+        connection.execute(
+            "UPDATE documents SET stored_filename = '../outside.txt' WHERE id = ?",
+            (upload.document.document_id,),
+        )
+        connection.commit()
+
+    deleted = context.document_workflow.delete_document(upload.document.document_id)
+
+    assert deleted.managed_copy_cleanup_warning is True
+    assert outside.read_text(encoding="utf-8") == "external original"
+    assert context.document_workflow.list_documents() == []
+
+
+def test_managed_copy_deletion_failure_returns_safe_partial_cleanup_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    upload = context.document_workflow.process_and_index(
+        original_filename="locked.txt",
+        data=b"Synthetic locked-file cleanup fixture.",
+    )
+    monkeypatch.setattr(
+        "groundnote.ui.workflows.remove_managed_document_copy",
+        lambda **kwargs: ManagedFileCleanupResult(ManagedFileCleanupStatus.FAILED),
+    )
+
+    deleted = context.document_workflow.delete_document(upload.document.document_id)
+
+    assert deleted.managed_copy_cleanup_warning is True
+    assert context.document_workflow.list_documents() == []
+
+
+def test_clear_all_continues_after_one_managed_copy_cleanup_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = build_application_context(
+        _settings(tmp_path),
+        embedding_provider=FakeEmbeddingProvider(dimension=4),
+        chat_provider=FakeChatProvider(),
+    )
+    context.document_workflow.process_and_index(
+        original_filename="locked.txt",
+        data=b"Synthetic locked managed copy.",
+    )
+    context.document_workflow.process_and_index(
+        original_filename="removable.txt",
+        data=b"A removable managed copy.",
+    )
+    assert context.settings.document_directory is not None
+    managed_files = sorted(context.settings.document_directory.iterdir())
+    real_remover = remove_managed_document_copy
+    calls = 0
+
+    def remove_with_first_failure(
+        *,
+        managed_root: Path,
+        stored_filename: str,
+    ) -> ManagedFileCleanupResult:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return ManagedFileCleanupResult(ManagedFileCleanupStatus.FAILED)
+        return real_remover(managed_root=managed_root, stored_filename=stored_filename)
+
+    monkeypatch.setattr(
+        "groundnote.ui.workflows.remove_managed_document_copy",
+        remove_with_first_failure,
+    )
+
+    cleared = context.document_workflow.clear_all_documents()
+
+    assert sum(item.managed_copy_cleanup_warning for item in cleared) == 1
+    assert context.document_workflow.list_documents() == []
+    assert sum(path.exists() for path in managed_files) == 1
 
 
 def test_reindex_document_reuses_existing_chunks_without_duplicates(tmp_path: Path) -> None:
@@ -433,6 +566,8 @@ def test_reindex_document_reuses_existing_chunks_without_duplicates(tmp_path: Pa
         data=b"# Topic\n\nA local note with one stable chunk.",
     )
     before = context.document_workflow.get_document(upload.document.document_id)
+    assert context.settings.document_directory is not None
+    managed_files_before = sorted(context.settings.document_directory.iterdir())
 
     refreshed = context.document_workflow.reindex_document(upload.document.document_id)
 
@@ -443,6 +578,7 @@ def test_reindex_document_reuses_existing_chunks_without_duplicates(tmp_path: Pa
     assert before.indexed_at is not None
     assert refreshed.indexed_at >= before.indexed_at
     assert len(context.document_workflow.list_documents()) == 1
+    assert sorted(context.settings.document_directory.iterdir()) == managed_files_before
 
 
 def test_failed_reindex_leaves_no_duplicate_or_searchable_stale_chunks(tmp_path: Path) -> None:

@@ -23,6 +23,12 @@ application bootstrap, which creates missing platform-local directories and appl
 migrations transactionally. Repeating setup is safe: existing files, document rows, embeddings,
 and logs are not reset or replaced. The setup never downloads a model.
 
+Phase 9.1A extends normal application bootstrap with idempotent index-state reconciliation. A
+transient document left by a previous process, or a Ready record whose chunks, embeddings, model
+metadata, and FTS rows are inconsistent, is changed to a retryable non-searchable state. Partial
+embedding and FTS data are cleared, while committed pre-embedding chunks and the GroundNote-managed
+copy are preserved for explicit re-index. Unrelated complete documents are not changed.
+
 ## Doctor behavior
 
 `python -m groundnote doctor` performs non-model checks and returns zero only when no blocking
@@ -56,8 +62,10 @@ guidance without raw exceptions or infinite reruns.
 ## Data safety
 
 The default data location remains the platform-local GroundNote application data folder. Phase 9
-does not move existing data. Scripts never delete original documents or reset SQLite. Only stale
-launcher metadata may be removed after its process identity fails verification.
+does not move existing data. Scripts never delete original documents or reset SQLite. Knowledge Base
+Remove/Clear actions may delete only the validated GroundNote-managed copies represented by the
+removed database records; original selected files remain untouched. Stale launcher metadata may be
+removed only after its process identity fails verification.
 
 ## Release boundary
 

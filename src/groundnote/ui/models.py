@@ -43,6 +43,7 @@ class DocumentSummary:
     indexed_at: datetime | None
     embedding_model: str | None
     error_message: str | None = None
+    managed_copy_cleanup_warning: bool = False
 
 
 @dataclass(frozen=True)

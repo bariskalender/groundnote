@@ -2,8 +2,9 @@
 
 ## Current Phase
 
-Phase 9 complete locally. Validation passed, focused local commits were created, and nothing was
-pushed.
+Phase 9.1A complete locally. Grounding correctness, interrupted-index recovery, Ready integrity,
+and managed-copy safety were implemented and validated. Focused local commits were created and
+nothing was pushed.
 
 ## Completed Tasks
 
@@ -607,8 +608,9 @@ pushed.
   bulk controls, and re-index controls remain Phase 8 work.
 - Phase 7.2 materially improves the observed 81.726 s unrelated-question path to 0.546 s by
   returning insufficient evidence before chat generation.
-- Phase 7.2 deterministic context answers are intentionally narrow and evidence-gated. General
-  document questions still use the local chat model and may remain slower than deterministic paths.
+- Topic-specific deterministic factual answers were removed in Phase 9.1A. General factual
+  document questions use relevant retrieved evidence and the local chat model, so they can remain
+  slower than non-factual router responses.
 - Manual Phase 7.2 indexing remained slow for medium PDFs on CPU: MB PDF 98.081 s and Turkish
   design PDF 107.257 s. Duplicate detection and warm embedding reuse are improved, but full
   background indexing and broader indexing controls remain future work.
@@ -732,7 +734,65 @@ pushed.
 - A full signed MSI/EXE/MSIX installer, automatic updates, system service, and bundled models are
   intentionally not part of Phase 9.
 
+## Phase 9.1A Correctness, Recovery, and Managed File Safety
+
+- Removed every topic-specific grounded factual shortcut from the RAG service. Greetings, invalid
+  input, inventory, app help, formatting cleanup, and citation-free insufficient-evidence behavior
+  remain deterministic.
+- Added adversarial grounding controls for unrelated gardening/RAM, coffee/Mercedes, car/coffee,
+  and hydraulics/computer-memory combinations, plus relevant English/Turkish evidence controls.
+- Added a centralized index integrity contract requiring at least one chunk, complete compatible
+  float32 embeddings, matching document model metadata, and exactly one valid FTS row per chunk.
+- Retrieval SQL independently excludes incomplete indexes even before a UI reconciliation read.
+- Bootstrap now treats persisted transient states from a previous process as interrupted, clears
+  partial embeddings and FTS rows, preserves committed pre-embedding chunks and the managed copy,
+  and marks the document retryable. Reconciliation is idempotent and leaves unrelated Ready
+  documents unchanged.
+- Final indexing verifies storage integrity in the same transaction before setting `INDEXED`.
+  Embedding, database, or FTS failures leave no usable partial index and preserve explicit retry.
+- Remove and clear-all now delete only direct, normal managed files represented by database rows
+  after canonical containment and reparse-point validation. External originals, traversal targets,
+  symlinks/reparse points, and unrelated managed-directory files are preserved.
+- The database transaction commits before managed-file cleanup. A later filesystem failure leaves
+  the database consistent and produces a sanitized localized partial-cleanup warning; automatic
+  orphan retry is not attempted without durable ownership metadata.
+- Re-index reuses the existing committed chunks and managed copy. The current storage design does
+  not preserve the prior complete vector version during a failed re-index.
+
+## Phase 9.1A Validation
+
+- Adversarial RAG target: Passed, including four unrelated-evidence cases and relevant
+  Turkish/English controls.
+- Index recovery/storage/retrieval/UI target: Passed, 49 tests.
+- Managed-file/workflow/localization/Streamlit target: Passed, 30 tests and one environment-based
+  symlink skip on Windows.
+- `uv sync`: Passed.
+- `uv run ruff check .`: Passed.
+- `uv run ruff format --check .`: Passed, 169 files formatted.
+- `uv run mypy src`: Passed, no issues in 103 source files.
+- `uv run pytest -m "not foundry"`: Passed, 287 tests passed and one environment-based symlink
+  test skipped.
+- Coverage: Passed, 287 tests passed, one skipped, and 79% total coverage.
+- Foundry check: Passed; CLI `0.10.2`, Windows SDK `1.2.3`, required candidates cached, and no
+  models initially loaded.
+- Fake UI pipeline: Passed with complete index, grounded citation, insufficient evidence,
+  duplicate detection, and restart persistence.
+- Real Foundry UI smoke: Passed with local embeddings, English/Turkish grounded answers, trusted
+  citations, and citation-free insufficient evidence.
+- Isolated Phase 9.1A smoke: Passed for false-grounding rejection, relevant grounding, interrupted
+  recovery, retrieval exclusion, retry, managed-copy removal, original/unrelated-file safety,
+  duplicate behavior, and clear-all inventory.
+- Final cleanup: Passed; the chat model loaded by real smoke was unloaded, Foundry was restored to
+  its initially stopped state, relevant Streamlit ports were free, and phase temp/coverage
+  artifacts were removed.
+
+## Phase 9.1A Deferred Work
+
+- Phase 9.1B: performance/resource measurements and controls, including any future multi-file queue
+  design, remain unstarted.
+- Phase 9.1C: parser archive/decompression bounds and clean-machine/release hardening remain
+  unstarted.
+
 ## Next Phase
 
-No next numbered phase is defined. Await explicit direction for clean-machine release validation or
-final portfolio/demo polish.
+Phase 9.1B is next only if explicitly requested. Phase 10 has not started.

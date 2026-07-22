@@ -514,8 +514,6 @@ def indicates_insufficient_evidence(answer: str, *, language: str) -> bool:
     return any(marker in normalized for marker in markers)
 
 
-
-
 def _has_plausible_context_overlap(query: str, context_items: list[RagContextItem]) -> bool:
     query_terms = _content_terms(query)
     if not query_terms:

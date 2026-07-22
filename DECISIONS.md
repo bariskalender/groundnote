@@ -444,3 +444,49 @@ The stop script verifies the token against the exact process command line and ve
 owner before terminating anything. It never kills all Python processes and leaves Foundry Local
 unchanged unless the user explicitly supplies `-StopFoundry`, because the local daemon may be shared
 with another application.
+
+## ADR-0042: Require Retrieved Evidence For Every Factual Document Answer
+
+- Status: Accepted
+- Date: 2026-07-22
+
+GroundNote no longer contains topic-specific deterministic factual answers. A factual document
+question must pass the generic retrieval overlap/entity checks and use the normal evidence prompt,
+answer validation, and trusted citation map. Unrelated context produces the localized
+insufficient-evidence response without citations. Deterministic routing remains only for greetings,
+invalid input, app help, document inventory, explicit no-evidence behavior, and formatting-only
+cleanup that does not introduce facts.
+
+## ADR-0043: Prove Index Integrity Before Ready And Reconcile It At Bootstrap
+
+- Status: Accepted
+- Date: 2026-07-22
+
+`INDEXED` means that a committed document has at least one chunk, a compatible finite float32
+embedding for every chunk, matching document model metadata, and exactly one valid FTS row per
+chunk. The final indexing transaction checks these counts before changing the status. Retrieval
+queries repeat the complete-index predicate so incomplete records cannot become sources even before
+the UI refreshes them.
+
+At fresh bootstrap, persisted transient states are considered interrupted in the current
+single-process architecture. Their partial embeddings and FTS rows are cleared and they become
+retryable `FAILED` records. Committed pre-embedding chunks and the managed copy are preserved because
+they form the only safe re-index input. This recovery is idempotent. The current schema cannot
+preserve an old complete vector set while a replacement re-index is attempted, so a failed re-index
+remains consistently non-searchable rather than exposing mixed versions.
+
+## ADR-0044: Commit Database Deletion Before Validated Managed-Copy Cleanup
+
+- Status: Accepted
+- Date: 2026-07-22
+
+Remove and clear-all commit their parameterized SQLite deletion first, then attempt to unlink only
+the recorded GroundNote-managed direct child after canonical root containment, normal-file, and
+reparse-point checks. Original selected files and unrelated files are never deletion targets. A
+missing managed copy is an idempotent success. If validation, locking, or permissions prevent
+cleanup, the database remains consistent and the UI shows a sanitized partial-cleanup warning.
+
+This ordering avoids a filesystem deletion followed by a database rollback that would leave a
+Ready record pointing to a missing managed copy. It can leave an orphaned managed copy after a
+post-commit filesystem failure; automatic retry is deferred because the deleted row no longer
+provides durable ownership metadata and guessing from filenames would weaken path safety.

@@ -677,7 +677,7 @@ def _document_status_label(status: DocumentStatus, language: str) -> str:
     if status == DocumentStatus.INDEXED:
         return t("ready", language)
     if status == DocumentStatus.FAILED:
-        return t("failed", language)
+        return t("retry_required", language)
     if status == DocumentStatus.INDEXING:
         return t("indexing", language)
     if status in {DocumentStatus.PENDING, DocumentStatus.PENDING_EMBEDDING}:
@@ -734,6 +734,13 @@ def _render_document_row(  # type: ignore[no-redef]
         document_action_busy = not can_start_operation(st.session_state)
         st.caption(f"📄 {safe_filename(document.original_filename)}")
         st.caption(_document_status_label(document.status, language))
+        if document.status == DocumentStatus.FAILED:
+            message_key = (
+                "indexing_interrupted"
+                if document.error_message and "interrupted" in document.error_message.casefold()
+                else "document_not_ready"
+            )
+            st.caption(t(message_key, language))
         with st.expander(t("document_metadata", language), expanded=False):
             metadata = [
                 t("document_type", language).format(file_type=format_file_type(document.file_type)),
@@ -812,10 +819,22 @@ def _delete_document(
         deleted = context.document_workflow.delete_document(document.document_id)
         _remove_deleted_document_from_session(deleted.document_id)
         st.session_state[PENDING_DELETE_DOCUMENT_ID] = None
-        st.success(
-            t("document_deleted", language).format(
-                filename=safe_filename(deleted.original_filename)
-            )
+        set_flash_notice(
+            st.session_state,
+            FlashNotice(
+                message=(
+                    t("managed_copy_cleanup_warning", language)
+                    if deleted.managed_copy_cleanup_warning
+                    else t("document_deleted", language).format(
+                        filename=safe_filename(deleted.original_filename)
+                    )
+                ),
+                severity=(
+                    FlashSeverity.WARNING
+                    if deleted.managed_copy_cleanup_warning
+                    else FlashSeverity.SUCCESS
+                ),
+            ),
         )
         succeeded = True
     except Exception as exc:
@@ -954,7 +973,21 @@ def _clear_all_documents(
         deleted = context.document_workflow.clear_all_documents()
         _clear_document_references_from_session({item.document_id for item in deleted})
         st.session_state[PENDING_CLEAR_DOCUMENTS] = False
-        st.success(t("documents_cleared", language).format(count=len(deleted)))
+        warning_count = sum(item.managed_copy_cleanup_warning for item in deleted)
+        set_flash_notice(
+            st.session_state,
+            FlashNotice(
+                message=(
+                    t("managed_copies_cleanup_warning", language).format(
+                        count=len(deleted),
+                        warning_count=warning_count,
+                    )
+                    if warning_count
+                    else t("documents_cleared", language).format(count=len(deleted))
+                ),
+                severity=(FlashSeverity.WARNING if warning_count else FlashSeverity.SUCCESS),
+            ),
+        )
         succeeded = True
     except Exception as exc:
         render_message(

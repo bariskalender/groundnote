@@ -14,6 +14,11 @@ from groundnote.documents.errors import (
     UnsupportedFileTypeError,
 )
 from groundnote.documents.hashing import calculate_sha256
+from groundnote.documents.managed_files import (
+    ManagedFileCleanupResult,
+    ManagedFileCleanupStatus,
+    remove_managed_document_copy,
+)
 from groundnote.documents.models import (
     DuplicateCheckResult,
     DuplicateType,
@@ -42,6 +47,8 @@ __all__ = [
     "EncodingError",
     "EncryptedDocumentError",
     "FileTooLargeError",
+    "ManagedFileCleanupResult",
+    "ManagedFileCleanupStatus",
     "NoExtractableTextError",
     "ParsedDocument",
     "ParsedSection",
@@ -55,6 +62,7 @@ __all__ = [
     "detect_file_type",
     "generate_safe_stored_filename",
     "normalize_text",
+    "remove_managed_document_copy",
     "safe_display_filename",
     "validate_local_file",
 ]

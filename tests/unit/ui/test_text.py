@@ -16,3 +16,18 @@ def test_phase_eight_knowledge_base_text_is_localized() -> None:
     assert "başarıyla yeniden indekslendi" in t("document_reindexed", "tr")
     assert "Another document operation" in t("operation_busy_upload", "en")
     assert "Başka bir belge işlemi" in t("operation_busy_upload", "tr")
+
+
+def test_phase_nine_one_recovery_and_cleanup_text_is_localized() -> None:
+    keys = (
+        "retry_required",
+        "document_not_ready",
+        "indexing_interrupted",
+        "managed_copy_cleanup_warning",
+        "managed_copies_cleanup_warning",
+    )
+    for key in keys:
+        assert t(key, "en") != key
+        assert t(key, "tr") != key
+    assert "managed copy" in t("confirm_delete_document", "en")
+    assert "yönettiği kopyayı" in t("confirm_delete_document", "tr")

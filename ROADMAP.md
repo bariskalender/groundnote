@@ -19,6 +19,21 @@
 | 8 | Knowledge Base Management, Delete, Re-index, and Index Controls | Complete |
 | 8.1 | Knowledge Base UI and Operation State Stabilization | Complete |
 | 9 | Packaging and Release Preparation | Complete |
+| 9.1A | RAG Correctness, Index Recovery, and Managed File Safety | Complete |
+
+## Phase 9.1A Acceptance Notes
+
+- Removed topic-specific deterministic factual answers; factual document questions now require
+  relevant retrieved evidence and the normal citation validation path.
+- Added a centralized Ready integrity contract covering committed chunks, compatible float32
+  embeddings, document model metadata, and one valid FTS row per chunk.
+- Added idempotent bootstrap recovery for interrupted transient states and incomplete Ready records;
+  affected documents become non-searchable and immediately retryable.
+- Added final indexing integrity validation and failure cleanup so partial embeddings or FTS rows
+  cannot become usable or cited.
+- Remove and clear-all now delete only validated GroundNote-managed copies represented by database
+  records; original selected files and unrelated managed-directory files remain untouched.
+- Phase 9.1B performance/resource work and Phase 9.1C parser/release hardening remain deferred.
 
 ## Phase 9 Acceptance Notes
 

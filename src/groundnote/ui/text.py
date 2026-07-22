@@ -33,6 +33,11 @@ TEXT: dict[str, dict[str, str]] = {
         "processing": "Processing",
         "ready": "Ready",
         "failed": "Failed",
+        "retry_required": "Interrupted / Retry required",
+        "document_not_ready": "This document is not ready and will not be used for answers.",
+        "indexing_interrupted": (
+            "Indexing was interrupted. Re-index this document to make it available."
+        ),
         "duplicate": "This file is already indexed.",
         "retry": "Retry",
         "reselect_retry": "Select this file again to retry.",
@@ -62,20 +67,38 @@ TEXT: dict[str, dict[str, str]] = {
         "technical_details": "Technical details",
         "show_debug_details": "Show debug details",
         "delete_document": "Remove",
-        "confirm_delete_document": "Remove this document?",
+        "confirm_delete_document": (
+            "This removes the document from GroundNote's index and deletes GroundNote's "
+            "managed copy. The original file you selected is not deleted."
+        ),
         "delete_confirm": "Remove",
         "delete_cancel": "Cancel",
         "document_deleted": (
-            "Removed {filename} from GroundNote. The original file on disk was not deleted."
+            "Removed {filename} and GroundNote's managed copy. The original selected file "
+            "was not deleted."
+        ),
+        "managed_copy_cleanup_warning": (
+            "The document was removed from GroundNote, but its managed copy could not be "
+            "deleted. The original selected file was not touched."
         ),
         "reindex_document": "Re-index",
         "reindexing_document": "Re-indexing {filename}",
         "document_reindexed": "{filename} was re-indexed successfully.",
         "clear_all_documents": "Clear all documents",
         "confirm_clear_all_documents": "Clear all documents from GroundNote's index?",
-        "clear_all_warning": "This removes documents, chunks, embeddings, and search entries from GroundNote only. Original files on your computer are not deleted.",
+        "clear_all_warning": (
+            "This removes all represented documents from GroundNote's index and deletes "
+            "GroundNote's managed copies. Original files you selected are not deleted."
+        ),
         "clear_all_confirm": "Clear all",
-        "documents_cleared": "Removed {count} document(s) from GroundNote's local index. Original files were not deleted.",
+        "documents_cleared": (
+            "Removed {count} document(s) and their GroundNote-managed copies. Original "
+            "selected files were not deleted."
+        ),
+        "managed_copies_cleanup_warning": (
+            "Removed {count} document(s) from GroundNote, but {warning_count} managed "
+            "copy/copies could not be deleted. Original selected files were not touched."
+        ),
         "document_metadata": "Details",
         "document_pages": "{count} page(s)",
         "document_chunks": "{count} chunk(s)",
@@ -170,19 +193,44 @@ TR_EXTRA_TEXT: dict[str, str] = {
     "indexed_documents": "İndekslenmiş belgeler",
     "show_debug_details": "Geliştirici detaylarını göster",
     "delete_document": "Kaldır",
-    "confirm_delete_document": "Bu belge kaldırılsın mı?",
+    "confirm_delete_document": (
+        "Bu işlem belgeyi GroundNote indeksinden kaldırır ve GroundNote'un yönettiği kopyayı "
+        "siler. Seçtiğiniz orijinal dosya silinmez."
+    ),
     "delete_confirm": "Kaldır",
     "delete_cancel": "İptal",
-    "document_deleted": "{filename} GroundNote içinden kaldırıldı. Diskteki özgün dosya silinmedi.",
+    "document_deleted": (
+        "{filename} ve GroundNote'un yönettiği kopya kaldırıldı. Seçtiğiniz orijinal dosya "
+        "silinmedi."
+    ),
+    "managed_copy_cleanup_warning": (
+        "Belge GroundNote'tan kaldırıldı ancak yönetilen kopyası silinemedi. Seçtiğiniz "
+        "orijinal dosyaya dokunulmadı."
+    ),
     "duplicate": "Bu dosya zaten indekslenmiş.",
     "reindex_document": "Yeniden indeksle",
     "reindexing_document": "{filename} yeniden indeksleniyor",
     "document_reindexed": "{filename} başarıyla yeniden indekslendi.",
     "clear_all_documents": "Tümünü temizle",
     "confirm_clear_all_documents": "Tüm belgeler GroundNote indeksinden kaldırılsın mı?",
-    "clear_all_warning": "Bu işlem yalnızca GroundNote içindeki belge, parça, embedding ve arama kayıtlarını kaldırır. Bilgisayarınızdaki özgün dosyalar silinmez.",
+    "clear_all_warning": (
+        "Bu işlem temsil edilen tüm belgeleri GroundNote indeksinden kaldırır ve GroundNote'un "
+        "yönettiği kopyaları siler. Seçtiğiniz orijinal dosyalar silinmez."
+    ),
     "clear_all_confirm": "Tümünü temizle",
-    "documents_cleared": "{count} belge GroundNote yerel indeksinden kaldırıldı. Özgün dosyalar silinmedi.",
+    "documents_cleared": (
+        "{count} belge ve GroundNote'un yönettiği kopyaları kaldırıldı. Seçtiğiniz orijinal "
+        "dosyalar silinmedi."
+    ),
+    "managed_copies_cleanup_warning": (
+        "{count} belge GroundNote'tan kaldırıldı ancak {warning_count} yönetilen kopya "
+        "silinemedi. Seçtiğiniz orijinal dosyalara dokunulmadı."
+    ),
+    "retry_required": "Yarıda kesildi / Yeniden deneme gerekli",
+    "document_not_ready": "Bu belge hazır değil ve cevaplarda kullanılmayacak.",
+    "indexing_interrupted": (
+        "İndeksleme yarıda kesildi. Belgeyi kullanılabilir hâle getirmek için yeniden indeksleyin."
+    ),
     "document_metadata": "Ayrıntılar",
     "document_pages": "{count} sayfa",
     "document_chunks": "{count} parça",

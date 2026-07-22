@@ -179,6 +179,8 @@ metadata are available.
 - Phase 8 Knowledge Base and lightweight session management completed locally.
 - Phase 8.1 Knowledge Base action and operation-state stabilization completed locally.
 - Phase 9 packaging and release preparation completed locally.
+- Phase 9.1A grounding correctness, interrupted-index recovery, and managed-copy safety completed
+  locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
@@ -191,8 +193,12 @@ metadata are available.
   insufficient evidence without chat generation. Obvious out-of-domain named-entity questions also
   fail fast when retrieved chunks do not contain the requested entities.
 - Persistent database-backed conversation memory is intentionally not implemented.
-- Remove, clear-all, and per-document re-index controls change only GroundNote's local database
-  index; they never delete the original source files.
+- Remove and clear-all delete GroundNote's database records and only the validated managed copies
+  created inside GroundNote's document directory. They never delete the original selected files or
+  unrelated local files. Re-index reuses the existing chunks and managed copy.
+- A document is Ready only when its chunks, compatible float32 embeddings, model metadata, and FTS
+  rows form a complete committed index. Interrupted or inconsistent documents are excluded from
+  retrieval and can be explicitly re-indexed.
 
 See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking-strategy.md`,
 `docs/pre-embedding-ingestion.md`, `docs/embedding-and-indexing.md`, and

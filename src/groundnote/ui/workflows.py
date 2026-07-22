@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Literal, cast
 
 from groundnote.config import Settings
-from groundnote.documents import DuplicateDocumentError
+from groundnote.documents import (
+    DuplicateDocumentError,
+    ManagedFileCleanupResult,
+    ManagedFileCleanupStatus,
+    remove_managed_document_copy,
+)
 from groundnote.documents.uploads import write_uploaded_bytes
 from groundnote.domain import Document, DocumentStatus, SupportedFileType
 from groundnote.rag import (
@@ -33,6 +39,7 @@ from groundnote.ui.models import (
     UploadOutcomeKind,
     UploadStage,
 )
+from groundnote.utils import get_logger, safe_log_warning
 
 StageCallback = Callable[[UploadStage], None]
 PROCESSING_DOCUMENT_STATUSES = {
@@ -59,6 +66,7 @@ class DocumentWorkflow:
         self.ingestion_service = ingestion_service
         self.indexing_service = indexing_service
         self.index_integrity_service = index_integrity_service
+        self.logger = get_logger(__name__)
 
     def process_and_index(
         self,
@@ -166,7 +174,7 @@ class DocumentWorkflow:
         ]
 
     def delete_document(self, document_id: str) -> DocumentSummary:
-        """Delete one indexed document and its local index rows without touching user files."""
+        """Delete index rows, then remove only GroundNote's validated managed copy."""
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")
@@ -179,10 +187,11 @@ class DocumentWorkflow:
             unit_of_work.vectors.delete_for_document(document_id)
             unit_of_work.documents.delete(document_id)
             unit_of_work.commit()
-            return summary
+        cleanup = self._remove_managed_copy(document)
+        return replace(summary, managed_copy_cleanup_warning=cleanup.warning)
 
     def clear_all_documents(self) -> list[DocumentSummary]:
-        """Clear the local GroundNote index without deleting any original source files."""
+        """Clear index rows, then remove only managed copies represented by those rows."""
         with self.unit_of_work_factory() as unit_of_work:
             if unit_of_work.documents is None or unit_of_work.vectors is None:
                 raise RuntimeError("Document repositories are unavailable.")
@@ -201,7 +210,13 @@ class DocumentWorkflow:
             unit_of_work.vectors.clear_all_chunks()
             unit_of_work.documents.delete_all()
             unit_of_work.commit()
-            return summaries
+        return [
+            replace(
+                summary,
+                managed_copy_cleanup_warning=self._remove_managed_copy(document).warning,
+            )
+            for document, summary in zip(documents, summaries, strict=True)
+        ]
 
     def reindex_document(self, document_id: str) -> DocumentSummary:
         """Regenerate embeddings for the existing locally persisted chunks once."""
@@ -212,6 +227,24 @@ class DocumentWorkflow:
         if error.existing_document_id is None:
             raise RuntimeError("Duplicate document metadata is unavailable.") from error
         return self.get_document(error.existing_document_id)
+
+    def _remove_managed_copy(self, document: Document) -> ManagedFileCleanupResult:
+        root = self.settings.document_directory
+        if root is None:
+            result = ManagedFileCleanupResult(ManagedFileCleanupStatus.FAILED)
+        else:
+            result = remove_managed_document_copy(
+                managed_root=root,
+                stored_filename=document.stored_filename,
+            )
+        if result.warning:
+            safe_log_warning(
+                self.logger,
+                "managed_document_copy_cleanup_incomplete",
+                document_id=document.id,
+                cleanup_status=result.status.value,
+            )
+        return result
 
     @staticmethod
     def _notify(callback: StageCallback | None, stage: UploadStage) -> None:
