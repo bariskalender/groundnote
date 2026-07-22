@@ -183,14 +183,18 @@ metadata are available.
   locally.
 - Phase 9.1B single-chat-model lifecycle, indexing diagnostics, duplicate-work removal, and local
   performance measurement completed locally.
+- Phase 9.1C bounded multi-file upload queue, sequential progress, isolated failure continuation,
+  and final model cleanup completed locally.
 - Secure validation and text extraction are implemented for PDF, DOCX, TXT, and Markdown.
 - Parsed documents are chunked and persisted with `PENDING_EMBEDDING` status.
 - Local embeddings are generated and persisted for indexed documents.
 - Semantic retrieval returns ranked chunks with citation metadata.
 - Grounded single-turn RAG answer generation is implemented with citation validation.
-- The Streamlit interface automatically processes selected files sequentially, shows compact safe
-  document states, supports per-document retry, and provides session-only chat, trusted citations,
-  compact source display, and insufficient-evidence results.
+- The Streamlit interface accepts up to 10 files in one selection by default (50 MB per file and
+  100 MB combined), processes them sequentially, and shows a compact localized queue. One failed,
+  invalid, or duplicate file does not stop later files. Chat remains unavailable until the queue
+  finishes. Waiting files exist only in the current browser session; after a full refresh, select
+  any lost waiting files again.
 - Invalid short inputs do not call retrieval or local models. Low-confidence retrieval returns
   insufficient evidence without chat generation. Obvious out-of-domain named-entity questions also
   fail fast when retrieved chunks do not contain the requested entities.
@@ -210,7 +214,8 @@ See `docs/supported-documents.md`, `docs/document-processing.md`, `docs/chunking
 `docs/phase-7-2-1-real-test-stability.md`, and
 `docs/phase-7-2-2-section-retrieval-ui-stability.md`, and
 `docs/phase-8-knowledge-base-session-management.md`, `docs/phase-9-packaging-release.md`,
-`docs/phase-9-1b-model-lifecycle-performance.md`, `docs/packaging-strategy.md`, and
+`docs/phase-9-1b-model-lifecycle-performance.md`,
+`docs/phase-9-1c-multi-file-upload-queue.md`, `docs/packaging-strategy.md`, and
 `docs/release-checklist.md` for current behavior and limitations.
 
 ## Privacy

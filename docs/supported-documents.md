@@ -15,7 +15,9 @@ Extensions are checked case-insensitively. Browser MIME types are not trusted as
 
 ## File Size Limit
 
-The upload size limit is controlled by `GROUNDNOTE_MAX_UPLOAD_MB`, which defaults to `50`.
+The per-file upload size limit is controlled by `GROUNDNOTE_MAX_UPLOAD_MB`, which defaults to `50`.
+The in-session queue defaults to 10 files and 100 MB combined through
+`GROUNDNOTE_MAX_UPLOAD_FILES` and `GROUNDNOTE_MAX_UPLOAD_TOTAL_MB`.
 
 ## PDF Limits
 

@@ -535,3 +535,25 @@ Indexing now records content-free stage durations, counts, model reuse, and best
 CPU/RSS. These details are opt-in through technical details. Filenames, paths, document text,
 prompts, questions, hashes, and vector values are excluded. The benchmark uses temporary storage
 and cleans GroundNote-owned models afterward.
+
+## ADR-0048: Own a Bounded Sequential Upload Queue in the Streamlit Session
+
+- Status: Accepted
+- Date: 2026-07-22
+
+GroundNote owns upload queue state in the current Streamlit session. A stable submission identity
+and opaque item identities prevent normal reruns from duplicating work. The queue retains one
+bounded immutable byte buffer per waiting item because Streamlit's uploader object is not a durable
+execution source; terminal outcomes release that buffer immediately. Queue metadata never contains
+extracted text, prompts, vectors, raw exceptions, or paths.
+
+Exactly one item may parse, embed, or write at a time, and chat remains blocked under one global
+queue operation. The embedding provider may remain warm only across items in that queue, then all
+GroundNote-owned providers are unloaded in final cleanup. Failed, invalid, and duplicate outcomes
+are isolated so later items continue. Persisted failures retry through the existing re-index and
+integrity contract; pre-persistence failures require the user to reselect the file.
+
+The queue is intentionally not durable across a full browser session refresh or machine restart.
+Phase 9.1A database recovery remains authoritative for interrupted persisted records. A background
+worker, parallel indexing, durable job service, and active-operation cancellation would introduce
+new ownership and recovery semantics and remain outside Phase 9.1C.

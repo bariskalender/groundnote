@@ -2,9 +2,10 @@
 
 ## Current Phase
 
-Phase 9.1B complete locally. GroundNote-owned chat model lifecycle, embedding cleanup, indexing
-stage diagnostics, duplicate-work removal, bounded batching, and isolated performance measurement
-were implemented and validated. Focused local commits were created and nothing was pushed.
+Phase 9.1C complete locally. GroundNote now owns a bounded in-session multi-file upload queue with
+deterministic sequential indexing, safe per-file progress/failure handling, rerun deduplication,
+bounded waiting buffers, localized summaries, and final model cleanup. Validation and real Foundry
+measurements passed. Focused local commits were created and nothing was pushed.
 
 ## Completed Tasks
 
@@ -170,7 +171,8 @@ were implemented and validated. Focused local commits were created and nothing w
 - Disabled detailed Streamlit browser exceptions and expanded localized safe error mapping.
 - Removed the manual document-processing button and permanent indexing administration panels.
 - Added automatic sequential upload processing with stable identities, rerun protection, duplicate
-  skipping, per-file failure isolation, and no uploaded bytes in session state.
+  skipping, and per-file failure isolation. Phase 9.1C later added one bounded in-session byte
+  buffer per waiting queue item and releases it at every terminal outcome.
 - Added compact document statuses and inline retry that safely reuses persisted document and chunk
   identities when possible.
 - Moved language, performance, answer-language, and model lifecycle controls into an upper-right
@@ -789,7 +791,7 @@ were implemented and validated. Focused local commits were created and nothing w
 ## Phase 9.1A Deferred Work
 
 - Phase 9.1B: completed locally; lifecycle and performance details are recorded below.
-- Phase 9.1C: multi-file upload remains unstarted.
+- Phase 9.1C: completed locally; queue details and measurements are recorded below.
 - Phase 9.1D: security and release hardening remain unstarted.
 
 ## Phase 9.1B Model Lifecycle and Indexing Performance
@@ -829,6 +831,41 @@ were implemented and validated. Focused local commits were created and nothing w
 - Foundry CLI `0.10.2`, Windows SDK `1.2.3`, Python `3.11.15`, required cached aliases, and local-only
   inference were verified. The current catalog selects CPUExecutionProvider for the candidates.
 
+## Phase 9.1C Multi-file Upload Queue and Indexing UX
+
+- Added explicit Waiting, Validating, Parsing, Chunking, Embedding, Saving, Verifying, Ready,
+  Duplicate, Failed, Interrupted, and Cancelled queue states without changing database meanings.
+- Stable submission identities stop ordinary Streamlit reruns, language/debug changes, New Chat,
+  and uploader resets from repeating completed work.
+- The queue accepts at most 10 files and 100 MB combined by default, while the existing 50 MB
+  per-file validation remains authoritative. Both queue limits are configurable and validated.
+- Exactly one item indexes at a time. Duplicate or invalid files terminate independently and the
+  next waiting item continues; one global operation guard blocks chat for the whole queue.
+- Waiting items retain exactly one bounded byte buffer in the current Streamlit session. Ready,
+  Duplicate, Failed, Interrupted, and Cancelled outcomes release it immediately. A full browser
+  session refresh may lose waiting files, which must then be selected again.
+- Persisted failed/interrupted documents use the existing safe re-index contract for explicit
+  Retry. A failure before database persistence requires reselection. Active work is never cancelled
+  mid-write; waiting-item cancellation is safe and releases its buffer.
+- The embedding model is reused across items in the same queue and GroundNote-owned models are
+  unloaded in final cleanup after all-success, middle-failure, and final-failure paths.
+- Real Foundry measurement used three generated 2,588-byte files: 3, 13, and 3 chunks; 5.055 s,
+  6.893 s, and 2.812 s per file; 14.761 s queue total; 906.695 MB peak process RSS; 7,764 peak
+  retained upload bytes; one simultaneous item; model reuse on files two and three; zero loaded
+  models and zero retained bytes after cleanup.
+
+## Phase 9.1C Validation
+
+- `uv sync`, Ruff check/format, mypy, 340-test non-Foundry regression, 79% coverage, Foundry check,
+  fake UI pipeline, fake and real queue benchmarks, real Foundry UI smoke, package version, and
+  diff checks passed.
+- Four queue pipeline integration scenarios passed: three mixed valid files; valid/duplicate/
+  invalid continuation; middle embedding failure; and final embedding failure with cleanup.
+- Foundry CLI `0.10.2`, Windows SDK `1.2.3`, Python `3.11.15`, cached CPU embedding/chat aliases,
+  grounded English/Turkish real answers, and zero cleanup warnings were verified.
+- One pre-existing Windows symlink capability test was skipped and pytest reported a non-fatal
+  `.pytest_cache` access warning; neither affects runtime behavior.
+
 ## Next Phase
 
-Phase 9.1C is next only if explicitly requested. Phase 9.1D and Phase 10 have not started.
+Phase 9.1D is next only if explicitly requested. Phase 10 has not started.

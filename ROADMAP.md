@@ -21,8 +21,23 @@
 | 9 | Packaging and Release Preparation | Complete |
 | 9.1A | RAG Correctness, Index Recovery, and Managed File Safety | Complete |
 | 9.1B | Model Lifecycle and Indexing Performance | Complete |
-| 9.1C | Multi-file Upload | Not started |
+| 9.1C | Multi-file Upload Queue and Indexing UX | Complete |
 | 9.1D | Security and Release Hardening | Not started |
+
+## Phase 9.1C Acceptance Notes
+
+- Added a bounded, session-owned upload queue with stable submission/item identities, deterministic
+  selection order, explicit lifecycle states, localized per-file progress, and one final summary.
+- Enforced one active indexing item, continued after isolated invalid/duplicate/failure outcomes,
+  and kept chat blocked for the entire synchronous queue operation.
+- Retained one bounded byte buffer only for each waiting item, released it after every terminal
+  outcome, and added safe waiting-item cancellation, persisted-document retry, and result clearing.
+- Reused the embedding model within a queue and unloaded GroundNote-owned models after final
+  success or failure. No background worker, persistent queue, or parallel inference was added.
+- Real three-file Foundry measurement completed in 14.761 seconds with one active item, 906.695 MB
+  peak process RSS, 7,764 peak retained upload bytes, model reuse on files two and three, and zero
+  loaded models after cleanup.
+- Phase 9.1D security/release hardening is next and unstarted. Phase 10 has not started.
 
 ## Phase 9.1B Acceptance Notes
 
@@ -36,8 +51,8 @@
   embedding; verified one parse, one chunking pass, ordered batches, and transactional failures.
 - Retained synchronous sequential indexing and blocked chat during indexing based on measured CPU
   contention; background queues remain deferred.
-- Phase 9.1C multi-file upload remains next and unstarted. Phase 9.1D security/release hardening is
-  also unstarted.
+- Phase 9.1C multi-file upload is complete. Phase 9.1D security/release hardening is next and
+  unstarted.
 
 ## Phase 9.1A Acceptance Notes
 

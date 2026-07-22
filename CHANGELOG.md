@@ -13,6 +13,8 @@ compatible bug fixes.
 - Deterministic portable ZIP packaging that excludes private/local data and model files.
 - Packaging strategy and release checklist documentation.
 - Privacy-safe indexing stage diagnostics, real chunk progress, and an isolated indexing benchmark.
+- Bounded in-session multi-file upload queue with localized progress, summaries, safe waiting-item
+  cancellation, and isolated per-file retry/failure behavior.
 
 ### Security and privacy
 
@@ -40,6 +42,9 @@ compatible bug fixes.
   before loading chat.
 - Upload indexing reuses the already-read bytes and SHA-256 digest instead of rereading and hashing
   the same content.
+- Multi-file selections now run in deterministic sequence, continue after duplicate/invalid/failed
+  items, avoid rerun duplication, release terminal upload buffers, and unload models after the
+  final queue item.
 
 ### Existing product baseline
 

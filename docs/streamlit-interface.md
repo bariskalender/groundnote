@@ -53,13 +53,13 @@ bottom chat input. Technical retrieval details are hidden from the normal answer
 
 ## Documents View
 
-The upload control accepts multiple `.pdf`, `.docx`, `.txt`, `.md`, or `.markdown` files. Streamlit and
-the authoritative backend validation both use the default 50 MB upload limit. Browser MIME values
-are not trusted.
+The upload control accepts multiple `.pdf`, `.docx`, `.txt`, `.md`, or `.markdown` files. The
+default limits are 10 files per queue, 50 MB per file, and 100 MB combined. The backend enforces
+the authoritative limits and does not trust browser MIME values.
 
-Documents are automatically processed and indexed after selection. Processing is sequential and
-locally executed; this is not a background queue. No separate processing or indexing button is
-required:
+Documents are registered in a bounded in-session queue and automatically processed after
+selection. Processing is synchronous, sequential, and local; it is not a background worker or a
+durable restart queue. No separate processing or indexing button is required:
 
 1. write the bytes under the application-controlled document directory with a collision-resistant
    stored filename;
@@ -69,7 +69,8 @@ required:
 5. persist metadata and chunks as `PENDING_EMBEDDING`;
 6. load the local embedding model and generate validated float32 embeddings;
 7. persist embeddings and mark the document `INDEXED`;
-8. keep the embedding model warm in Balanced/Fast mode or unload it in Memory saver mode.
+8. reuse the embedding model for the next waiting file, then unload GroundNote-owned models after
+   the final queue item.
 
 The UI reports real stage boundaries rather than estimated percentages. A successful summary shows
 only safe metadata: original filename, type, size, page/section counts when available, chunk counts,
@@ -173,20 +174,33 @@ in the settings popover.
 ## Session And Rerun Behavior
 
 `st.session_state` contains safe message models, current filter IDs, and an upload lifecycle made of
-opaque file identities, queued/completed/failed identity sets, compact statuses, and a structured
-operation record. It does not contain uploaded bytes, embeddings, model instances, database
-connections, transactions, or persistent chat history.
+opaque submission/item identities, compact statuses, and a structured operation record. Each
+Waiting item owns exactly one bounded immutable upload buffer so work can continue across ordinary
+Streamlit reruns. Ready, Duplicate, Failed, Interrupted, and Cancelled outcomes release it. Session
+state does not contain extracted document text, embeddings, model instances, database connections,
+transactions, or persistent chat history.
 
 The application context is cached as a Streamlit resource because it contains stateless service
 composition and lazily initialized provider objects. SQLite connections remain short-lived and are
 never cached. Uploaded bytes, extracted text, prompts, answers, and vectors are not cached.
 
-Stable upload identities combine safe filename, size, and a local content fingerprint. Completed
-and failed identities are not automatically queued again on Streamlit reruns, language changes,
-settings changes, chat submission, or New chat. SHA-256 database duplicate detection remains the
-authoritative content-level fallback. Structured operations record an ID, type, file identity,
-start/completion time, and terminal status. `try/finally` releases active state, and stale operations
-are detected after a bounded interval.
+Stable submission identities combine the uploader revision and ordered opaque content identities.
+Completed and active items are not queued again on Streamlit reruns, language/debug changes,
+settings changes, chat submission, New chat, or the completion rerun. SHA-256 database duplicate
+detection remains the authoritative content-level fallback. Structured operations record an ID,
+type, start/completion time, and terminal status. `try/finally` releases active state and all
+GroundNote-owned models after the queue.
+
+The queue shows selection position, sanitized filename, current stage, real completed/total units,
+safe duration, and terminal outcome. One failure does not block later files. Failed or Interrupted
+items backed by a persisted document offer Retry; a pre-persistence failure requires reselection.
+Waiting items can be cancelled safely, and terminal result cards can be cleared. Active database or
+model work is never interrupted through the queue UI.
+
+A full browser session refresh may discard waiting in-memory buffers. GroundNote does not pretend
+those files completed and does not reconstruct incomplete buffers. Phase 9.1A bootstrap recovery
+remains authoritative for persisted transient document records; the user must reselect any lost
+waiting-only files.
 
 New file selections are rejected before queue registration while a document/database operation is
 active. The UI displays a localized busy explanation and advances the upload widget key so a
@@ -217,8 +231,8 @@ only privacy-safe event names, categories, counts, statuses, and durations.
 - Balanced unloads idle models after a short local idle TTL.
 - Fast keeps models warm longer and may use more RAM.
 - Memory saver unloads models after each operation and uses a shorter idle TTL.
-- Sequential uploads reuse a warm embedding provider inside the session when the selected mode
-  allows it.
+- Sequential queue items reuse one warm embedding provider, then final cleanup unloads it regardless
+  of the selected performance mode.
 - The UI avoids starting indexing and answer generation at the same time in the normal Streamlit
   flow.
 - Chat models are unloaded before document indexing when safe.

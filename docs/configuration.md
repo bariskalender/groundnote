@@ -33,6 +33,10 @@ Retrieval, upload, chunking, and generation settings:
 - `GROUNDNOTE_TOP_K`
 - `GROUNDNOTE_SIMILARITY_THRESHOLD`
 - `GROUNDNOTE_MAX_UPLOAD_MB`
+- `GROUNDNOTE_MAX_UPLOAD_FILES`: maximum files retained in the in-session queue; default `10`,
+  valid range `1` through `25`.
+- `GROUNDNOTE_MAX_UPLOAD_TOTAL_MB`: combined waiting-buffer limit; default `100`, valid range `1`
+  through `500`, and never lower than the per-file limit.
 - `GROUNDNOTE_CHUNK_TARGET_CHARS`
 - `GROUNDNOTE_CHUNK_MAX_CHARS`
 - `GROUNDNOTE_CHUNK_OVERLAP_CHARS`
