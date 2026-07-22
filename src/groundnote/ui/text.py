@@ -20,6 +20,9 @@ TEXT: dict[str, dict[str, str]] = {
         "no_indexed_documents": "No indexed documents",
         "no_relevant_evidence": "No relevant evidence",
         "foundry_status": "Foundry status",
+        "groundnote_not_ready": (
+            "GroundNote is not ready yet. Run `scripts/doctor.ps1` to see what is missing."
+        ),
         "performance_mode": "Performance mode",
         "settings": "Settings",
         "settings_help": "Open settings",
@@ -159,6 +162,10 @@ TEXT: dict[str, dict[str, str]] = {
 }
 
 TR_EXTRA_TEXT: dict[str, str] = {
+    "groundnote_not_ready": (
+        "GroundNote henüz hazır değil. Eksik bileşenleri görmek için "
+        "`scripts/doctor.ps1` komutunu çalıştırın."
+    ),
     "knowledge_base": "Bilgi Tabanı",
     "indexed_documents": "İndekslenmiş belgeler",
     "show_debug_details": "Geliştirici detaylarını göster",

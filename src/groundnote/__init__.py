@@ -1,5 +1,10 @@
-"""GroundNote package."""
+"""GroundNote package metadata."""
+
+from importlib.metadata import PackageNotFoundError, version
 
 __all__ = ["__version__"]
 
-__version__ = "0.1.0"
+try:
+    __version__ = version("groundnote")
+except PackageNotFoundError:  # pragma: no cover - source tree without an installed distribution
+    __version__ = "0.0.0+unknown"

@@ -262,7 +262,7 @@ wheels = [
 
 [[package]]
 name = "groundnote"
-version = "0.1.0"
+version = "0.9.0"
 source = { editable = "." }
 dependencies = [
     { name = "foundry-local-sdk", marker = "sys_platform == 'darwin'" },

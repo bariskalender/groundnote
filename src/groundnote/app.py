@@ -9,12 +9,14 @@ from uuid import uuid4
 
 import streamlit as st
 
+from groundnote import __version__
 from groundnote.domain import DocumentStatus, SupportedFileType
 from groundnote.ui import ApplicationContext, build_application_context, unload_local_models
 from groundnote.ui.components.notices import render_message
 from groundnote.ui.components.upload import render_upload_control
 from groundnote.ui.errors import DatabaseBootstrapError, map_exception, safe_failure_message
 from groundnote.ui.formatting import format_duration, format_file_type, safe_filename
+from groundnote.ui.foundry_status import FoundryStatusKind
 from groundnote.ui.models import (
     ChatMessageState,
     DocumentSummary,
@@ -129,6 +131,7 @@ def _render_header_and_settings(context: ApplicationContext) -> str:
             key=ANSWER_LANGUAGE,
         )
         st.toggle(t("show_debug_details", language), key=SHOW_DEBUG_DETAILS)
+        st.caption(f"GroundNote {__version__}")
         if st.session_state.get(PERFORMANCE_MODE) == "Memory saver":
             st.caption(t("memory_saver_notice", language))
         st.caption(t("local_notice", language))
@@ -473,6 +476,8 @@ def _render_foundry_status(context: ApplicationContext, language: str) -> None:
     st.caption(f"{t('foundry_status', language)}: {status.label}")
     if status.instruction:
         st.caption(status.instruction)
+    if status.kind is not FoundryStatusKind.READY:
+        st.caption(t("groundnote_not_ready", language))
 
 
 def _render_chat_history(context: ApplicationContext, language: str) -> None:
